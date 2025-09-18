@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # MongoDB with persistence
+  mongodb:
+    image: mongo:5.0
+    container_name: testfleet-mongodb
+    restart: unless-stopped
+    environment:
+      # Pass through MongoDB environment variables from host
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - testfleet-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/${MONGO_INITDB_DATABASE} --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Control Server
+  control-server:
+    build:
+      context: .
+      dockerfile: ./dockerfile
+    container_name: testfleet-control-server
+    restart: unless-stopped
+    environment:
+      # Pass through environment variables from host
+      MONGODB_URI: ${MONGODB_URI}
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET}
+      OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL}
+      ORGANIZATION_NAME: ${ORGANIZATION_NAME}
+      ALLOWED_DOMAINS: ${ALLOWED_DOMAINS}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      LOG_LEVEL: ${LOG_LEVEL}
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - testfleet-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:${PORT:-3000}/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  testfleet-network:
+    driver: bridge
