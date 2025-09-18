@@ -5,13 +5,9 @@ const { connectDatabase, disconnectDatabase } = require('./config/db')
 
 async function startServer() {
   try {
-    console.log('testdbstart')
     await connectDatabase()
-    console.log('testdbend')
 
-    console.log('testadminstart')
     await bootstrapAdminAccount()
-    console.log('testadminend')
 
     const app = express()
     app.use(express.json())
