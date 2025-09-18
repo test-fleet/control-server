@@ -15,6 +15,8 @@ RUN chown -R testfleet:nodejs /app
 
 USER testfleet
 
+# Expose port
 EXPOSE 3000
 
+# Start the server
 CMD ["node", "index.js"]

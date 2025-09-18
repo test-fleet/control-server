@@ -1,13 +1,35 @@
-    const express = require('express');
-    const app = express();
-    const port = 3000; // Or any desired port
+const express = require('express');
 
-    // Define a basic route
-    app.get('/', (req, res) => {
-      res.send('Hello from Express!');
-    });
+const { bootstrapAdminAccount } = require('./src/utils/bootstrapAdmin')
+const { connectDatabase, disconnectDatabase } = require('./config/db')
 
-    // Start the server
+async function startServer() {
+  try {
+    console.log('testdbstart')
+    await connectDatabase()
+    console.log('testdbend')
+
+    console.log('testadminstart')
+    await bootstrapAdminAccount()
+    console.log('testadminend')
+
+    const app = express()
+    app.use(express.json())
+
+    const port = process.env.PORT || 3000
     app.listen(port, () => {
-      console.log(`Server listening at http://localhost:${port}`);
-    });
+      console.log(`server running on port ${port}`)
+    })
+  } catch (err) {
+    console.error('Failed to start server:', err)
+    process.exit(1)
+  }
+}
+
+process.on('SIGINT', async () => {
+  console.log('shutting down gracefully...')
+  await disconnectDatabase()
+  process.exit(0)
+})
+
+startServer()
