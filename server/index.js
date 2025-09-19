@@ -1,4 +1,6 @@
+const path = require('path');
 const express = require('express');
+const fs = require('fs');
 
 const { bootstrapAdminAccount } = require('./src/utils/bootstrapAdmin')
 const { connectDatabase, disconnectDatabase } = require('./config/db')
@@ -11,6 +13,15 @@ async function startServer() {
 
     const app = express()
     app.use(express.json())
+
+    const FRONTEND_DIST = path.resolve(process.cwd(), 'frontend', 'dist');
+    app.use(express.static(FRONTEND_DIST));
+
+// Anything NOT starting with /api goes to React app
+    app.get(/^\/(?!api\/).*/, (_req, res) => {
+      res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+    });
+
 
     const port = process.env.PORT || 3000
     app.listen(port, () => {
