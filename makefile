@@ -45,6 +45,11 @@ clean:
 # View logs
 logs:
 	@echo "Viewing TestFleet logs..."
+	docker-compose logs -f control-server
+
+# View logs
+logs-mongo:
+	@echo "Viewing TestFleet logs with MongoDB..."
 	docker-compose logs -f
 
 # Show service status

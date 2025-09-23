@@ -8,7 +8,11 @@ const UserSchema = new mongoose.Schema({
     lowercase: true,
     trim: true
   },
-  username: {
+  userName: {
+    type: String,
+    trim: true,
+  },
+  avatar: {
     type: String,
     trim: true
   },
@@ -20,7 +24,7 @@ const UserSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['invited', 'active', 'disabled'],
-    default: ['invited']
+    default: 'invited'
   },
   invitedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -33,9 +37,6 @@ const UserSchema = new mongoose.Schema({
   lastLogin: {
     type: Date
   },
-}, { timeStamps: true })
+}, { timestamps: true })
 
-// userSchema.index({ email: 1 });
-// userSchema.index({ role: 1, status: 1 });
-
-module.exports = mongoose.model('user', UserSchema)
+module.exports = mongoose.model('User', UserSchema)

@@ -1,4 +1,4 @@
-const User = require('../models/user')
+const User = require('../models/user.model')
 
 async function bootstrapAdminAccount() {
   const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL
