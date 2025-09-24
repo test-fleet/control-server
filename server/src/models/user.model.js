@@ -1,4 +1,5 @@
 const mongoose = require('mongoose')
+const { STATUS, ROLES } = require('../utils/constants')
 
 const UserSchema = new mongoose.Schema({
   email: {
@@ -18,13 +19,13 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'user'],
-    default: 'user'
+    enum: [ROLES.ADMIN, ROLES.USER],
+    default: ROLES.USER
   },
   status: {
     type: String,
-    enum: ['invited', 'active', 'disabled'],
-    default: 'invited'
+    enum: [STATUS.ACTIVE, STATUS.INVITED, STATUS.DISABLED],
+    default: STATUS.INVITED
   },
   invitedBy: {
     type: mongoose.Schema.Types.ObjectId,

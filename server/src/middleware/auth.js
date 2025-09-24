@@ -2,6 +2,7 @@
 const jwt = require('jsonwebtoken')
 const User = require('../models/user.model')
 const { UnauthorizedError, ForbiddenError, NotFoundError } = require('../utils/appError')
+const { STATUS, ROLES } = require('../utils/constants')
 
 async function authenticateJWT(req, res, next) {
   const authHeader = req.headers['authorization']
@@ -22,7 +23,7 @@ async function authenticateJWT(req, res, next) {
       return next(new NotFoundError('User not found'))
     }
 
-    if (user.status === 'disabled') {
+    if (user.status === STATUS.DISABLED) {
       return next(new ForbiddenError('Account is disabled'))
     }
 

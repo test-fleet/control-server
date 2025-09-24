@@ -1,5 +1,6 @@
 const User = require('../models/user.model')
 const { NotFoundError } = require('../utils/appError')
+const { STATUS, ROLES } = require('../utils/constants')
 
 async function findOrCreateOAuthUser(userInfo) {
   const email = userInfo.email.toLowerCase()
@@ -13,12 +14,12 @@ async function findOrCreateOAuthUser(userInfo) {
     throw new UnauthorizedError('User not invited')
   }
 
-  if (user.status === 'disabled') {
+  if (user.status === STATUS.DISABLED) {
     throw new UnauthorizedError('Account is disabled')
   }
 
-  if (user.status === 'invited') {
-    user.status = 'active'
+  if (user.status === STATUS.INVITED) {
+    user.status = STATUS.ACTIVE
     user.userName = userName
     user.avatar = avatar
     user.lastLogin = new Date()

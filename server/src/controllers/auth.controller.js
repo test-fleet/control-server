@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken')
 const passport = require('passport')
 const { UnauthorizedError } = require('../utils/appError')
-const { findOrCreateOAuthUser } = require('../services/auth.service')
 
 function oauthLogin(req, res, next) {
   try {

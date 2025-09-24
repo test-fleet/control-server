@@ -10,6 +10,7 @@ const { connectDatabase, disconnectDatabase } = require("./config/db");
 const errorHandler = require("./src/middleware/errors");
 
 const authRoutes = require('./src/routes/auth.routes')
+const userRoutes = require('./src/routes/user.routes')
 
 async function startServer() {
   try {
@@ -24,6 +25,7 @@ async function startServer() {
     setupSwagger(app);
 
     app.use('/api/v1', authRoutes);
+    app.use('/api/v1', userRoutes);
 
     const FRONTEND_DIST = path.resolve(process.cwd(), "frontend", "dist");
     app.use(express.static(FRONTEND_DIST));
