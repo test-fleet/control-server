@@ -1,4 +1,5 @@
 const mongoose = require('mongoose')
+const { STATUS, ROLES } = require('../utils/constants')
 
 const UserSchema = new mongoose.Schema({
   email: {
@@ -8,19 +9,23 @@ const UserSchema = new mongoose.Schema({
     lowercase: true,
     trim: true
   },
-  username: {
+  userName: {
+    type: String,
+    trim: true,
+  },
+  avatar: {
     type: String,
     trim: true
   },
   role: {
     type: String,
-    enum: ['admin', 'user'],
-    default: 'user'
+    enum: [ROLES.ADMIN, ROLES.USER],
+    default: ROLES.USER
   },
   status: {
     type: String,
-    enum: ['invited', 'active', 'disabled'],
-    default: ['invited']
+    enum: [STATUS.ACTIVE, STATUS.INVITED, STATUS.DISABLED],
+    default: STATUS.INVITED
   },
   invitedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -33,9 +38,6 @@ const UserSchema = new mongoose.Schema({
   lastLogin: {
     type: Date
   },
-}, { timeStamps: true })
+}, { timestamps: true })
 
-// userSchema.index({ email: 1 });
-// userSchema.index({ role: 1, status: 1 });
-
-module.exports = mongoose.model('user', UserSchema)
+module.exports = mongoose.model('User', UserSchema)

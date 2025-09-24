@@ -1,4 +1,5 @@
-const User = require('../models/user')
+const User = require('../models/user.model')
+const { STATUS, ROLES } = require('./constants')
 
 async function bootstrapAdminAccount() {
   const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL
@@ -14,8 +15,8 @@ async function bootstrapAdminAccount() {
     if (!existingBootstrapAccount) {
       await User.create({
         email: bootstrapEmail,
-        role: 'admin',
-        status: 'invited'
+        role: ROLES.ADMIN,
+        status: STATUS.INVITED
       })
       console.log(`Bootstrap admin ${bootstrapEmail} invited. Please log in with your auth provider.`)
     } else {
