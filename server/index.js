@@ -11,6 +11,7 @@ const errorHandler = require("./src/middleware/errors");
 
 const authRoutes = require('./src/routes/auth.routes')
 const userRoutes = require('./src/routes/user.routes')
+const runnerRoutes = require('./src/routes/runner.routes')
 
 async function startServer() {
   try {
@@ -26,6 +27,7 @@ async function startServer() {
 
     app.use('/api/v1', authRoutes);
     app.use('/api/v1', userRoutes);
+    app.use('/api/v1', runnerRoutes);
 
     const FRONTEND_DIST = path.resolve(process.cwd(), "frontend", "dist");
     app.use(express.static(FRONTEND_DIST));
