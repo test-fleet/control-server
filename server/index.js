@@ -6,6 +6,7 @@ const passport = require('passport')
 const { setupPassport } = require('./src/utils/oauthPassport')
 const { setupSwagger } = require('./src/utils/swaggerConfig')
 const { bootstrapAdminAccount } = require("./src/utils/bootstrapAdmin");
+const { bootstrapDevRunner } = require('./src/utils/bootstrapRunner')
 const { connectDatabase, disconnectDatabase } = require("./config/db");
 const errorHandler = require("./src/middleware/errors");
 
@@ -18,6 +19,10 @@ async function startServer() {
     await setupPassport();
     await connectDatabase();
     await bootstrapAdminAccount();
+
+    if (process.env.ENV.toLowerCase() == "dev") {
+      await bootstrapDevRunner()
+    }
 
     const app = express();
     app.use(express.json());

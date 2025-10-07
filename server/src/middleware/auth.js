@@ -86,7 +86,7 @@ async function authenticateRunner(req, res, next) {
 
     const method = req.method.toUpperCase()
     const path = req.originalUrl.split('?')[0]
-    const body = (req.body && Object.keys(req.body).length ? JSON.stringify(req.body) : '')
+    const body = JSON.stringify(req.body)
     const canonical = `${ts}.${method}.${path}.${body}`
 
     const h = crypto.createHmac('sha256', secret).update(canonical).digest('hex')

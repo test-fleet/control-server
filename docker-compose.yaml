@@ -32,7 +32,8 @@ services:
     container_name: testfleet-control-server
     restart: unless-stopped
     environment:
-      # Pass through environment variables from host
+      # Pass through environment variables from hosta
+      ENV: ${ENV}
       MONGODB_URI: ${MONGODB_URI}
       NODE_ENV: ${NODE_ENV}
       PORT: ${PORT}
@@ -47,6 +48,8 @@ services:
       ALLOWED_DOMAINS: ${ALLOWED_DOMAINS}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       LOG_LEVEL: ${LOG_LEVEL}
+      API_MASTER_KEY: ${API_MASTER_KEY}
+      API_MASTER_SECRET: ${API_MASTER_SECRET}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
@@ -62,6 +65,24 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  test-runner:
+    image: ghcr.io/test-fleet/test-runner:latest
+    # image: ghcr.io/test-fleet/test-runner:sha-c9e261d
+    depends_on:
+      - control-server
+    container_name: testfleet-runner
+    restart: unless-stopped
+    environment:
+      CONTROL_SERVER_URL: ${CONTROL_SERVER_URL}
+      API_KEY: ${API_MASTER_KEY}
+      API_SECRET: ${API_MASTER_SECRET}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
+      REDIS_URL: ${REDIS_URI}
+    ports:
+      - "8081:8081"
+    networks:
+      - testfleet-network
 
 volumes:
   mongodb_data:
