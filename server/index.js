@@ -1,7 +1,8 @@
 const path = require("path");
 const express = require("express");
 const fs = require("fs");
-const passport = require('passport')
+const passport = require('passport');
+const cookieParser = require('cookie-parser');
 
 const { setupPassport } = require('./src/utils/oauthPassport')
 const { setupSwagger } = require('./src/utils/swaggerConfig')
@@ -26,6 +27,7 @@ async function startServer() {
 
     const app = express();
     app.use(express.json());
+    app.use(cookieParser());
     app.use(passport.initialize());
 
     setupSwagger(app);
