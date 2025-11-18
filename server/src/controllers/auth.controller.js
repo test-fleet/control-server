@@ -5,7 +5,7 @@ const { UnauthorizedError } = require('../utils/appError')
 function oauthLogin(req, res, next) {
   try {
     const provider = process.env.OAUTH_PROVIDER?.toLowerCase();
-
+    console.log("provider: ", provider);
     let scope;
     switch (provider) {
       case 'google':
@@ -40,7 +40,15 @@ function oauthCallback(req, res, next) {
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN }
       );
-      res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+      //res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+      res.cookie('auth_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000
+      });
+
+      res.redirect('/dashboard');
     } catch (err) {
       next(err);
     }
@@ -48,6 +56,14 @@ function oauthCallback(req, res, next) {
 }
 
 function logout(req, res) {
+  res.cookie('auth_token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0,
+    path: '/'
+  });
+
   res.json({ success: true, message: 'Delete client jwt' })
 }
 
@@ -64,6 +80,7 @@ function me(req, res, next) {
       lastLogin: req.user.lastLogin,
     })
   } catch (err) {
+    console.log("err: ", err)
     next(err)
   }
 }
