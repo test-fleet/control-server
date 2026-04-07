@@ -106,7 +106,7 @@ async function authenticateRunner(req, res, next) {
       keyId: runner.keyId,
       meta: runner.metadata
     }
-    
+
     return next()
   } catch (err) {
     console.log(err)

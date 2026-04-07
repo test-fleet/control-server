@@ -1,6 +1,6 @@
 const User = require('../models/user.model')
-const { NotFoundError } = require('../utils/appError')
-const { STATUS, ROLES } = require('../utils/constants')
+const { NotFoundError, UnauthorizedError } = require('../utils/appError')
+const { STATUS } = require('../utils/constants')
 
 async function findOrCreateOAuthUser(userInfo) {
   const email = userInfo.email.toLowerCase()

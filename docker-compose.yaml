@@ -68,9 +68,12 @@ services:
 
   test-runner:
     image: ghcr.io/test-fleet/test-runner:latest
-    # image: ghcr.io/test-fleet/test-runner:sha-c9e261d
+    # image: ghcr.io/test-fleet/test-runner:sha-2ad2d08
     depends_on:
-      - control-server
+      control-server:
+        condition: service_started
+      redis:
+        condition: service_healthy
     container_name: testfleet-runner
     restart: unless-stopped
     environment:
@@ -78,11 +81,24 @@ services:
       API_KEY: ${API_MASTER_KEY}
       API_SECRET: ${API_MASTER_SECRET}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
-      REDIS_URL: ${REDIS_URI}
+      REDIS_URL: ${REDIS_URL}
+      REDIS_CHANNEL: ${REDIS_CHANNEL}
     ports:
       - "8081:8081"
     networks:
       - testfleet-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - testfleet-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   mongodb_data:

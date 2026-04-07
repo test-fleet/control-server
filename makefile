@@ -28,7 +28,7 @@ dev:
 # Build and start services
 build:
 	@echo "Building and starting TestFleet..."
-	docker-compose up -d --build
+	docker-compose up -d --build --pull always
 
 # Stop services
 stop:
