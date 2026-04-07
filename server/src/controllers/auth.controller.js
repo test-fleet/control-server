@@ -7,9 +7,12 @@ function oauthLogin(req, res, next) {
     const provider = process.env.OAUTH_PROVIDER?.toLowerCase();
     console.log("provider: ", provider);
     let scope;
+    const options = {session: false}
+
     switch (provider) {
       case 'google':
         scope = ['email', 'profile'];
+        options.prompt = 'select_account'; // prompt account select
         break;
       case 'microsoft':
         scope = ['User.Read'];
@@ -23,7 +26,9 @@ function oauthLogin(req, res, next) {
       default:
         return next(new Error(`Unsupported OAUTH_PROVIDER: ${provider}`));
     }
-    passport.authenticate(provider, { scope, session: false })(req, res, next);
+
+    options.scope = scope
+    passport.authenticate(provider, options)(req, res, next);
   } catch (err) {
     next(err);
   }
