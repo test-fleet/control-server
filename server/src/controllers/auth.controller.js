@@ -5,7 +5,7 @@ const { UnauthorizedError } = require('../utils/appError')
 function oauthLogin(req, res, next) {
   try {
     const provider = process.env.OAUTH_PROVIDER?.toLowerCase();
-
+    console.log("provider: ", provider);
     let scope;
     const options = {session: false}
 
@@ -54,6 +54,14 @@ function oauthCallback(req, res, next) {
 }
 
 function logout(req, res) {
+  res.cookie('auth_token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0,
+    path: '/'
+  });
+
   res.json({ success: true, message: 'Delete client jwt' })
 }
 
@@ -70,6 +78,7 @@ function me(req, res, next) {
       lastLogin: req.user.lastLogin,
     })
   } catch (err) {
+    console.log("err: ", err)
     next(err)
   }
 }
