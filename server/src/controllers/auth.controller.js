@@ -45,15 +45,8 @@ function oauthCallback(req, res, next) {
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN }
       );
-      //res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
-      res.cookie('auth_token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000
-      });
-
-      res.redirect('/dashboard');
+      const frontendUrl = process.env.FRONTEND_URL || '';
+      res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
     } catch (err) {
       next(err);
     }

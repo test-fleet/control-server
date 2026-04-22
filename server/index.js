@@ -1,30 +1,42 @@
 const path = require("path");
 const express = require("express");
 const fs = require("fs");
-const passport = require('passport');
-const cookieParser = require('cookie-parser');
+const os = require("os");
+const passport = require('passport')
 
 const { setupPassport } = require('./src/utils/oauthPassport')
 const { setupSwagger } = require('./src/utils/swaggerConfig')
 const { bootstrapAdminAccount } = require("./src/utils/bootstrapAdmin");
 const { bootstrapDevRunner } = require('./src/utils/bootstrapRunner')
+const { bootstrapServiceAccount } = require('./src/utils/bootstrapServiceAccount')
+const { bootstrapScene } = require('./src/utils/bootstrapScene')
 const { connectDatabase, disconnectDatabase } = require("./config/db");
+const { connectRedis, disconnectRedis } = require("./config/redis");
+const scheduler = require("./src/utils/scheduler");
 const errorHandler = require("./src/middleware/errors");
 
+const { authenticateJWT } = require('./src/middleware/auth')
 const authRoutes = require('./src/routes/auth.routes')
 const userRoutes = require('./src/routes/user.routes')
 const runnerRoutes = require('./src/routes/runner.routes')
 const sceneRoutes = require('./src/routes/scene.routes')
+const frameRoutes = require('./src/routes/frame.routes')
+const resultsRoutes = require('./src/routes/results.routes')
 
 async function startServer() {
   try {
     await setupPassport();
     await connectDatabase();
+    await connectRedis();
     await bootstrapAdminAccount();
 
     if (process.env.ENV.toLowerCase() == "dev") {
       await bootstrapDevRunner()
     }
+
+    const adminToken = await bootstrapServiceAccount()
+    await bootstrapScene(adminToken)
+    await scheduler.reload()
 
     const app = express();
     app.use(express.json());
@@ -33,10 +45,38 @@ async function startServer() {
 
     setupSwagger(app);
 
+    app.get('/api/v1/metrics', authenticateJWT, (_req, res) => {
+      const mem = process.memoryUsage();
+      const load = os.loadavg();
+      res.json({
+        uptime: Math.floor(process.uptime()),
+        memory: {
+          heapUsed: mem.heapUsed,
+          heapTotal: mem.heapTotal,
+          rss: mem.rss,
+        },
+        system: {
+          loadAvg1: parseFloat(load[0].toFixed(2)),
+          totalMem: os.totalmem(),
+          freeMem: os.freemem(),
+        },
+        node: process.version,
+        platform: process.platform,
+      });
+    });
+
+    app.get('/api/v1/config', (_req, res) => {
+      res.json({
+        heartbeatInterval: parseInt(process.env.HEARTBEAT_INTERVAL) || 30000,
+      });
+    });
+
     app.use('/api/v1', authRoutes);
     app.use('/api/v1', userRoutes);
     app.use('/api/v1', runnerRoutes);
     app.use('/api/v1', sceneRoutes);
+    app.use('/api/v1', frameRoutes);
+    app.use('/api/v1', resultsRoutes);
 
     const FRONTEND_DIST = path.resolve(process.cwd(), "frontend", "dist");
     app.use(express.static(FRONTEND_DIST));
@@ -61,6 +101,7 @@ async function startServer() {
 process.on("SIGINT", async () => {
   console.log("shutting down gracefully...");
   await disconnectDatabase();
+  await disconnectRedis();
   process.exit(0);
 });
 

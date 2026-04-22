@@ -56,7 +56,7 @@ async function listRunners(page, limit) {
   }
 }
 
-async function recordHeartbeat(runnerId) {
+async function recordHeartbeat(runnerId, metrics) {
   const runner = await Runner.findById(runnerId)
   if (!runner) {
     console.error('runner not found')
@@ -65,11 +65,22 @@ async function recordHeartbeat(runnerId) {
 
   runner.lastSeen = new Date()
 
+  if (metrics) {
+    runner.performanceMetrics = {
+      cpuPercent:  metrics.cpuPercent  ?? null,
+      memUsedMb:   metrics.memUsedMb   ?? null,
+      heapAllocMb: metrics.heapAllocMb ?? null,
+      workers:     metrics.workers     ?? null,
+      activeJobs:  metrics.activeJobs  ?? null,
+      recordedAt:  new Date(),
+    }
+  }
+
   try {
     await runner.save()
   } catch (err) {
     console.error(err)
-    throw new AppError('failed to update runner last seen', 500)
+    throw new AppError('failed to update runner heartbeat', 500)
   }
 }
 

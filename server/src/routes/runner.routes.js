@@ -1,6 +1,6 @@
 const express = require('express')
 const { authenticateJWT, authenticateRunner } = require('../middleware/auth')
-const { createRunner, listRunners, runnerHeartbeat} = require('../controllers/runner.controller')
+const { createRunner, listRunners, runnerHeartbeat, runnerMetrics } = require('../controllers/runner.controller')
 const router = express.Router()
 
 /**
@@ -120,5 +120,7 @@ router.get('/runners', authenticateJWT, listRunners)
  *         description: Unauthorized - Invalid API key or signature
  */
 router.post('/runners/heartbeat', authenticateRunner, runnerHeartbeat)
+
+router.get('/runner/:id/metrics', authenticateRunner, runnerMetrics)
 
 module.exports = router

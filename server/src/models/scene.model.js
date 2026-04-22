@@ -3,17 +3,17 @@ const mongoose = require('mongoose')
 const VariableSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['string', 'number', 'boolean'],
+    enum: ['string', 'number', 'boolean', 'null'],
     required: true
   },
   value: {
-    type: mongoose.Schema.Types.Mixed, 
+    type: mongoose.Schema.Types.Mixed,
     default: null
   }
-}, { _id: false });
+}, { _id: false })
 
 const SceneSchema = new mongoose.Schema({
-  id: {
+    id: {
     type: String,
     required: true,
     unique: true,
@@ -26,7 +26,8 @@ const SceneSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
   variables: {
     type: Map,
@@ -34,14 +35,13 @@ const SceneSchema = new mongoose.Schema({
     default: {}
   },
   frameIds: [{
-    type: String,
-    required: true
+    type: String
   }],
   timeout: {
     type: Number,
     required: true,
-    default: 300000, // 5 minutes default
-    min: 1000 // 1 second
+    default: 300000,
+    min: 1000
   },
   orgId: {
     type: String,
@@ -50,6 +50,7 @@ const SceneSchema = new mongoose.Schema({
   },
   cronSchedule: {
     type: String,
+    required: true,
     trim: true
   },
   enabled: {
@@ -60,17 +61,12 @@ const SceneSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
+  lastRunStatus: { type: String, enum: ['passed', 'failed', 'error', null], default: null },
+  lastRunAt:     { type: Date, default: null },
+  lastRunId:     { type: String, default: null },
 }, {
   timestamps: true,
   collection: 'scenes'
-});
+})
 
-module.exports = mongoose.model('Scene', SceneSchema);
+module.exports = mongoose.model('Scene', SceneSchema)
