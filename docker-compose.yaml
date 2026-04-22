@@ -32,7 +32,7 @@ services:
     container_name: testfleet-control-server
     restart: unless-stopped
     environment:
-      # Pass through environment variables from hosta
+      # Pass through environment variables from host
       ENV: ${ENV}
       MONGODB_URI: ${MONGODB_URI}
       NODE_ENV: ${NODE_ENV}
@@ -50,12 +50,17 @@ services:
       LOG_LEVEL: ${LOG_LEVEL}
       API_MASTER_KEY: ${API_MASTER_KEY}
       API_MASTER_SECRET: ${API_MASTER_SECRET}
+      REDIS_URL: ${REDIS_URL}
+      REDIS_CHANNEL: ${REDIS_CHANNEL}
+      SERVER_URL: http://control-server:${PORT:-3000}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
       - ./logs:/app/logs
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - testfleet-network

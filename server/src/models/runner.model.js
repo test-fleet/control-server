@@ -32,6 +32,14 @@ const RunnerSchema = new mongoose.Schema({
     enum: ['active', 'disabled', 'offline'],
     default: 'active',
   },
+  performanceMetrics: {
+    cpuPercent:  { type: Number, default: null },
+    memUsedMb:   { type: Number, default: null },
+    heapAllocMb: { type: Number, default: null },
+    workers:     { type: Number, default: null },
+    activeJobs:  { type: Number, default: null },
+    recordedAt:  { type: Date,   default: null },
+  },
   metadata: {
     type: Map,
     of: String,

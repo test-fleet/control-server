@@ -21,7 +21,7 @@ dev:
 	@echo "Starting TestFleet development environment..."
 	@echo "MongoDB: $(MONGODB_URI)"
 	@echo "Organization: $(ORGANIZATION_NAME)"
-	docker-compose up -d --build
+	docker-compose up -d
 	@echo "TestFleet is running at http://localhost:$(PORT)"
 	@echo "View logs with: make logs"
 

@@ -43,9 +43,16 @@ async function listRunners(req, res, next) {
 
 async function runnerHeartbeat(req, res, next) {
   const { id } = req.runner
+  const performanceMetrics = {
+    cpuPercent:  req.body.cpu_percent,
+    memUsedMb:   req.body.mem_used_mb,
+    heapAllocMb: req.body.heap_alloc_mb,
+    workers:     req.body.goroutines,
+    activeJobs:  req.body.active_jobs,
+  }
 
   try {
-    await runnerService.recordHeartbeat(id)
+    await runnerService.recordHeartbeat(id, performanceMetrics)
     res.status(204).json({
       "success": true
     });
@@ -55,8 +62,15 @@ async function runnerHeartbeat(req, res, next) {
   }
 }
 
+async function runnerMetrics(req, res, next) {
+  const { id } = req.runner
+
+  // get buffered metrics for runner in redis
+}
+
 module.exports = {
   createRunner,
   listRunners,
-  runnerHeartbeat
+  runnerHeartbeat,
+  runnerMetrics
 }
