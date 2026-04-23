@@ -45,7 +45,7 @@ clean:
 # View logs
 logs:
 	@echo "Viewing TestFleet logs..."
-	docker-compose logs -f control-server test-runner
+	docker-compose logs -f control-server test-runner-a test-runner-b
 
 # View logs
 logs-mongo:

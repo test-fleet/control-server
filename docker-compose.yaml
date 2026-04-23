@@ -71,15 +71,15 @@ services:
       retries: 3
       start_period: 60s
 
-  test-runner:
+  test-runner-a:
     image: ghcr.io/test-fleet/test-runner:latest
-    # image: ghcr.io/test-fleet/test-runner:sha-2ad2d08
+    # image: ghcr.io/test-fleet/test-runner:sha-033c1ce
     depends_on:
       control-server:
         condition: service_started
       redis:
         condition: service_healthy
-    container_name: testfleet-runner
+    container_name: testfleet-runner-a
     restart: unless-stopped
     environment:
       CONTROL_SERVER_URL: ${CONTROL_SERVER_URL}
@@ -88,8 +88,30 @@ services:
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
       REDIS_CHANNEL: ${REDIS_CHANNEL}
-    ports:
-      - "8081:8081"
+      MAX_WORKERS: ${MAX_WORKERS}
+      RUNNER_NAME: "test-runner-a"
+    networks:
+      - testfleet-network
+
+  test-runner-b:
+    image: ghcr.io/test-fleet/test-runner:latest
+    # image: ghcr.io/test-fleet/test-runner:sha-033c1ce
+    depends_on:
+      control-server:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    container_name: testfleet-runner-b
+    restart: unless-stopped
+    environment:
+      CONTROL_SERVER_URL: ${CONTROL_SERVER_URL}
+      API_KEY: ${API_MASTER_KEY}
+      API_SECRET: ${API_MASTER_SECRET}
+      HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
+      REDIS_URL: ${REDIS_URL}
+      REDIS_CHANNEL: ${REDIS_CHANNEL}
+      MAX_WORKERS: ${MAX_WORKERS}
+      RUNNER_NAME: "test-runner-b"
     networks:
       - testfleet-network
 
