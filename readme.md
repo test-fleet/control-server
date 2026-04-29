@@ -49,3 +49,6 @@ make stop
 make build    # Rebuild and start services
 make status   # Check service status
 make clean    # Stop and remove all data (destructive!)
+```
+### Test Runner
+The distributed runner that executes scenes is maintained in a separate repository: [test-fleet/test-runner](https://github.com/test-fleet/test-runner).
