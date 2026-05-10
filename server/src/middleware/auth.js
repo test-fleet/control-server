@@ -8,7 +8,6 @@ const { decryptSecret } = require('../utils/crypto')
 const crypto = require('crypto')
 
 async function authenticateJWT(req, res, next) {
-  /*
   const authHeader = req.headers['authorization']
   if (!authHeader) {
     return next(new UnauthorizedError('Authorization header missing'))
@@ -17,13 +16,6 @@ async function authenticateJWT(req, res, next) {
   const token = authHeader.split(' ')[1]
   if (!token) {
     return next(new UnauthorizedError('Bearer token missing'))
-  }
-  */
-
-  const token = req.cookies.auth_token;
-
-  if (!token) {
-    return res.status(401).json({ error: 'Not authenticated '});
   }
 
   try {
@@ -94,7 +86,7 @@ async function authenticateRunner(req, res, next) {
 
     const method = req.method.toUpperCase()
     const path = req.originalUrl.split('?')[0]
-    const body = JSON.stringify(req.body)
+    const body = req.rawBody ?? ''
     const canonical = `${ts}.${method}.${path}.${body}`
 
     const h = crypto.createHmac('sha256', secret).update(canonical).digest('hex')

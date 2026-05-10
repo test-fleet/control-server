@@ -2,6 +2,7 @@ const path = require("path");
 const express = require("express");
 const fs = require("fs");
 const os = require("os");
+const cookieParser = require('cookie-parser')
 const passport = require('passport')
 
 const { setupPassport } = require('./src/utils/oauthPassport')
@@ -39,7 +40,9 @@ async function startServer() {
     await scheduler.reload()
 
     const app = express();
-    app.use(express.json());
+    app.use(express.json({
+      verify: (req, _res, buf) => { req.rawBody = buf.toString('utf-8') }
+    }));
     app.use(cookieParser());
     app.use(passport.initialize());
 
