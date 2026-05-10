@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Clock, Copy, Check, RefreshCw, KeyRound, AlertTriangle, WifiOff } from 'lucide-react'
+import { Plus, Clock, Copy, Check, RefreshCw, KeyRound, AlertTriangle, WifiOff, MoreHorizontal, Trash2, ToggleLeft, ToggleRight, Pencil } from 'lucide-react'
 import Pagination from '../components/Pagination'
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -118,6 +118,77 @@ function SecretReveal({ label, value }) {
   )
 }
 
+// ── ActionsMenu ────────────────────────────────────────────────────────────
+
+function ActionsMenu({ runner, onRename, onToggle, onDelete }) {
+  const [pos, setPos] = useState(null)
+
+  function toggle(e) {
+    e.stopPropagation()
+    if (pos) { setPos(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+  }
+
+  function act(fn) { setPos(null); fn() }
+
+  const menuStyle = {
+    position: 'fixed', top: pos?.top, right: pos?.right, zIndex: 200,
+    background: 'var(--surface-raised)', border: '1px solid var(--border-bright)',
+    borderRadius: 10, padding: 4, minWidth: 160,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+  }
+
+  const itemStyle = (color = 'var(--text)') => ({
+    display: 'flex', alignItems: 'center', gap: 8,
+    width: '100%', padding: '7px 10px', background: 'none', border: 'none',
+    color, fontSize: 13, borderRadius: 6, cursor: 'pointer',
+  })
+
+  return (
+    <>
+      <button className="btn btn--ghost btn--icon" onClick={toggle} title="Actions">
+        <MoreHorizontal size={15} />
+      </button>
+      {pos && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setPos(null)} />
+          <div style={menuStyle}>
+            <button
+              style={itemStyle()}
+              onClick={() => act(onRename)}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <Pencil size={13} />Rename
+            </button>
+            <button
+              style={itemStyle()}
+              onClick={() => act(onToggle)}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              {runner.status === 'disabled'
+                ? <><ToggleLeft size={13} />Enable</>
+                : <><ToggleRight size={13} />Disable</>
+              }
+            </button>
+            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+            <button
+              style={itemStyle('var(--error)')}
+              onClick={() => act(onDelete)}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--error-bg)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <Trash2 size={13} />Delete
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 // ── Chart tooltip ──────────────────────────────────────────────────────────
 
 function ChartTooltip({ active, payload, label, unit }) {
@@ -146,20 +217,23 @@ function ChartTooltip({ active, payload, label, unit }) {
 
 // ── MetricChart ────────────────────────────────────────────────────────────
 
-function MetricChart({ label, unit, dataKey, history, color, height = 90 }) {
+function MetricChart({ label, unit, dataKey, history, color, height = 90, heartbeatInterval = 30000 }) {
+  const now = Date.now()
+  const windowMs = MAX_HISTORY * heartbeatInterval
+  const xDomain = [now - windowMs, now]
+
   const points = (history || []).map(p => ({
     time: new Date(p.time).getTime(),
     v: p[dataKey],
-  })).filter(p => p.v !== null && p.v !== undefined)
+  })).filter(p => p.v !== null && p.v !== undefined && p.time >= xDomain[0])
 
   const allVals = points.map(p => p.v)
   const { min, avg, max } = stats(allVals)
   const yMin = allVals.length ? Math.max(0, Math.min(...allVals) * 0.85) : 0
   const yMax = allVals.length ? Math.max(...allVals) * 1.15 : 10
 
-  const current = history?.length
-    ? history[history.length - 1]?.[dataKey]
-    : null
+  const current = history?.length ? history[history.length - 1]?.[dataKey] : null
+  const isEmpty = points.length === 0
 
   return (
     <div style={{ flex: 1, minWidth: 0, padding: '14px 16px' }}>
@@ -185,7 +259,8 @@ function MetricChart({ label, unit, dataKey, history, color, height = 90 }) {
         </div>
       )}
 
-      {points.length >= 2 ? (
+      {/* Always render the chart — empty window shows axes, data fills in from the right */}
+      <div style={{ position: 'relative' }}>
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={points} margin={{ top: 2, right: 2, left: -28, bottom: 0 }}>
             <defs>
@@ -198,7 +273,7 @@ function MetricChart({ label, unit, dataKey, history, color, height = 90 }) {
             <XAxis
               dataKey="time"
               type="number"
-              domain={['dataMin', 'dataMax']}
+              domain={xDomain}
               scale="time"
               tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               tick={{ fontSize: 9, fill: 'var(--text-muted)', fontFamily: 'monospace' }}
@@ -213,29 +288,36 @@ function MetricChart({ label, unit, dataKey, history, color, height = 90 }) {
               axisLine={false}
               tickFormatter={v => v.toFixed(0)}
             />
-            <Tooltip
-              content={<ChartTooltip unit={unit} />}
-              cursor={{ stroke: 'var(--border-bright)', strokeWidth: 1, strokeDasharray: '3 3' }}
-            />
+            {!isEmpty && (
+              <Tooltip
+                content={<ChartTooltip unit={unit} />}
+                cursor={{ stroke: 'var(--border-bright)', strokeWidth: 1, strokeDasharray: '3 3' }}
+              />
+            )}
             <Area
               type="monotone"
               dataKey="v"
-              stroke={color}
+              stroke={isEmpty ? 'transparent' : color}
               strokeWidth={1.5}
-              fill={`url(#grad-${label})`}
+              fill={isEmpty ? 'transparent' : `url(#grad-${label})`}
               dot={false}
-              activeDot={{ r: 3, fill: color, stroke: 'var(--surface)', strokeWidth: 2 }}
+              activeDot={isEmpty ? false : { r: 3, fill: color, stroke: 'var(--surface)', strokeWidth: 2 }}
               isAnimationActive={false}
             />
           </AreaChart>
         </ResponsiveContainer>
-      ) : (
-        <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-            {points.length === 0 ? 'No data' : 'Collecting…'}
-          </span>
-        </div>
-      )}
+        {isEmpty && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              awaiting data
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -265,18 +347,18 @@ function RunnerMetrics({ runner, history, threshold, heartbeatInterval }) {
       }}>
         {/* Main metric charts */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          <MetricChart label="CPU"    unit="%"   dataKey="cpu"  history={hist} color="var(--lime)"  height={100} />
+          <MetricChart label="CPU"    unit="%"   dataKey="cpu"  history={hist} color="var(--lime)"  height={100} heartbeatInterval={heartbeatInterval} />
           <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-          <MetricChart label="Memory" unit=" MB" dataKey="mem"  history={hist} color="var(--blue)"  height={100} />
+          <MetricChart label="Memory" unit=" MB" dataKey="mem"  history={hist} color="var(--blue)"  height={100} heartbeatInterval={heartbeatInterval} />
           <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-          <MetricChart label="Heap"   unit=" MB" dataKey="heap" history={hist} color="var(--peach)" height={100} />
+          <MetricChart label="Heap"   unit=" MB" dataKey="heap" history={hist} color="var(--peach)" height={100} heartbeatInterval={heartbeatInterval} />
         </div>
 
         {/* Secondary charts: workers + active jobs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          <MetricChart label="Workers"     unit="" dataKey="workers"    history={hist} color="var(--purple, #a78bfa)" height={70} />
+          <MetricChart label="Workers"     unit="" dataKey="workers"    history={hist} color="var(--purple, #a78bfa)" height={70} heartbeatInterval={heartbeatInterval} />
           <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-          <MetricChart label="Active Jobs" unit="" dataKey="activeJobs" history={hist} color="var(--teal, #2dd4bf)"  height={70} />
+          <MetricChart label="Active Jobs" unit="" dataKey="activeJobs" history={hist} color="var(--teal, #2dd4bf)"  height={70} heartbeatInterval={heartbeatInterval} />
           <div style={{ flex: 1 }} />
         </div>
 
@@ -348,6 +430,9 @@ export default function Runners() {
   const [newRunner, setNewRunner] = useState(null)
   const [form, setForm] = useState({ name: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [renameTarget, setRenameTarget] = useState(null)
+  const [renameForm, setRenameForm] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   const limit = 20
 
@@ -355,12 +440,12 @@ export default function Runners() {
     setMetricsHistory(prev => {
       const existing = prev[id] || []
       if (!incoming.length) return prev
-      const lastExisting = existing[existing.length - 1]?.time
-      const newPoints = existing.length === 0
-        ? incoming
-        : incoming.filter(p => !lastExisting || p.time > lastExisting)
-      if (!newPoints.length) return prev
-      const merged = [...existing, ...newPoints].slice(-MAX_HISTORY)
+      const byTime = new Map()
+      ;[...existing, ...incoming].forEach(p => byTime.set(p.time, p))
+      const merged = [...byTime.values()]
+        .sort((a, b) => new Date(a.time) - new Date(b.time))
+        .slice(-MAX_HISTORY)
+      if (merged.length === existing.length && merged[merged.length - 1]?.time === existing[existing.length - 1]?.time) return prev
       return { ...prev, [id]: merged }
     })
   }, [])
@@ -400,6 +485,15 @@ export default function Runners() {
         setRunners(list)
         setTotal(data.total || 0)
         updateHistoryFromPoll(list)
+        // Pre-fetch Redis history for every visible runner in the background
+        list.forEach(r => {
+          api.get(`/runner/${r._id}/metrics`)
+            .then(res => {
+              const points = res.metrics || []
+              if (points.length) mergeHistory(r._id, points)
+            })
+            .catch(() => {})
+        })
       })
       .catch(err => { if (showSpinner) toast.error(err.message) })
       .finally(() => { if (showSpinner) setLoading(false) })
@@ -411,17 +505,6 @@ export default function Runners() {
   useEffect(() => { load() }, [load])
   useAutoRefresh(refresh, heartbeatInterval)
 
-  // Seed history from Redis when a runner modal is opened
-  useEffect(() => {
-    if (!selectedId) return
-    api.get(`/runner/${selectedId}/metrics`)
-      .then(data => {
-        const points = data.metrics || []
-        if (points.length) mergeHistory(selectedId, points)
-      })
-      .catch(() => {})
-  }, [selectedId]) // eslint-disable-line
-
   async function handleRegister(e) {
     e.preventDefault()
     if (!form.name.trim()) return
@@ -431,6 +514,48 @@ export default function Runners() {
       setNewRunner({ name: form.name.trim(), apiKey: data.apiKey, apiSecret: data.apiSecret })
       setForm({ name: '' })
       setShowRegister(false)
+      load()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleRename(e) {
+    e.preventDefault()
+    if (!renameForm.trim()) return
+    setSubmitting(true)
+    try {
+      await api.put(`/runner/${renameTarget._id}`, { name: renameForm.trim() })
+      toast.success(`Runner renamed to "${renameForm.trim()}"`)
+      setRenameTarget(null)
+      load(false)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleToggleRunner(runner) {
+    const newStatus = runner.status === 'disabled' ? 'active' : 'disabled'
+    try {
+      await api.put(`/runner/${runner._id}`, { status: newStatus })
+      toast.success(`Runner ${newStatus === 'disabled' ? 'disabled' : 'enabled'}`)
+      load(false)
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  async function handleDeleteRunner() {
+    setSubmitting(true)
+    try {
+      await api.delete(`/runner/${deleteTarget._id}`)
+      toast.success(`Runner "${deleteTarget.name}" deleted`)
+      setDeleteTarget(null)
+      if (selectedId === deleteTarget._id) setSelectedId(null)
       load()
     } catch (err) {
       toast.error(err.message)
@@ -473,10 +598,11 @@ export default function Runners() {
                     <th>Last Seen</th>
                     <th>API Key</th>
                     <th>Registered</th>
+                    {isAdmin && <th style={{ width: 48 }} />}
                   </tr>
                 </thead>
                 <tbody>
-                  {isAdmin && <AddRow colSpan={5} label="Register Runner" onClick={() => setShowRegister(true)} />}
+                  {isAdmin && <AddRow colSpan={6} label="Register Runner" onClick={() => setShowRegister(true)} />}
                   {runners.map(runner => {
                     return (
                       <tr
@@ -508,6 +634,16 @@ export default function Runners() {
                         <td style={{ color: 'var(--text-muted)' }}>
                           {formatDate(runner.createdAt)}
                         </td>
+                        {isAdmin && (
+                          <td onClick={e => e.stopPropagation()} style={{ textAlign: 'right', padding: '6px 8px' }}>
+                            <ActionsMenu
+                              runner={runner}
+                              onRename={() => { setRenameTarget(runner); setRenameForm(runner.name) }}
+                              onToggle={() => handleToggleRunner(runner)}
+                              onDelete={() => setDeleteTarget(runner)}
+                            />
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -577,6 +713,55 @@ export default function Runners() {
           </div>
           <div className="modal-footer">
             <button className="btn btn--primary" onClick={() => setNewRunner(null)}>I've saved the credentials</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Rename Runner Modal */}
+      {renameTarget && (
+        <Modal title="Rename Runner" onClose={() => setRenameTarget(null)}>
+          <form onSubmit={handleRename}>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Runner Name</label>
+                <input
+                  className="form-input"
+                  value={renameForm}
+                  onChange={e => setRenameForm(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn--secondary" onClick={() => setRenameTarget(null)}>Cancel</button>
+              <button type="submit" className="btn btn--primary" disabled={submitting || !renameForm.trim() || renameForm.trim() === renameTarget.name}>
+                {submitting ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Runner Modal */}
+      {deleteTarget && (
+        <Modal title="Delete Runner" onClose={() => setDeleteTarget(null)}>
+          <div className="modal-body">
+            <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>
+              Are you sure you want to delete <strong style={{ color: 'var(--text)' }}>{deleteTarget.name}</strong>?
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              This will permanently remove the runner and its metrics history.
+            </p>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn--secondary" onClick={() => setDeleteTarget(null)}>Cancel</button>
+            <button className="btn btn--danger" onClick={handleDeleteRunner} disabled={submitting}>
+              {submitting
+                ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Deleting…</>
+                : 'Delete Runner'
+              }
+            </button>
           </div>
         </Modal>
       )}

@@ -1,5 +1,5 @@
 const Runner = require('../models/runner.model')
-const { ConflictError, AppError } = require('../utils/appError')
+const { ConflictError, AppError, NotFoundError } = require('../utils/appError')
 const { generateApiKey, generateApiSecret, encryptSecret } = require('../utils/crypto')
 const { getPublisher } = require('../../config/redis')
 
@@ -122,9 +122,54 @@ async function getRunnerMetrics(runnerId) {
   }
 }
 
+async function updateRunner(runnerId, updates) {
+  const runner = await Runner.findById(runnerId)
+  if (!runner) throw new NotFoundError('Runner not found')
+
+  if (updates.name !== undefined) {
+    const conflict = await Runner.findOne({ name: updates.name, _id: { $ne: runnerId } })
+    if (conflict) throw new ConflictError('Runner with this name already exists')
+    runner.name = updates.name
+  }
+
+  if (updates.status !== undefined) {
+    runner.status = updates.status
+  }
+
+  try {
+    await runner.save()
+    return { id: runner._id, name: runner.name, status: runner.status }
+  } catch (err) {
+    console.error(err)
+    throw new AppError('failed to update runner', 500)
+  }
+}
+
+async function deleteRunner(runnerId) {
+  const runner = await Runner.findById(runnerId)
+  if (!runner) throw new NotFoundError('Runner not found')
+
+  try {
+    await Runner.deleteOne({ _id: runnerId })
+    try {
+      const client = getPublisher()
+      await client.del(metricsKey(runnerId))
+    } catch (err) {
+      console.error('[runner] failed to clean up metrics key:', err)
+    }
+    return { id: runnerId }
+  } catch (err) {
+    if (err instanceof NotFoundError) throw err
+    console.error(err)
+    throw new AppError('failed to delete runner', 500)
+  }
+}
+
 module.exports = {
   createNewRunner,
   listRunners,
   recordHeartbeat,
   getRunnerMetrics,
+  updateRunner,
+  deleteRunner,
 }

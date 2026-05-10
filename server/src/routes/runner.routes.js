@@ -1,6 +1,6 @@
 const express = require('express')
 const { authenticateJWT, authenticateRunner } = require('../middleware/auth')
-const { createRunner, listRunners, runnerHeartbeat, runnerMetrics } = require('../controllers/runner.controller')
+const { createRunner, listRunners, runnerHeartbeat, runnerMetrics, updateRunner, deleteRunner } = require('../controllers/runner.controller')
 const router = express.Router()
 
 /**
@@ -122,5 +122,95 @@ router.get('/runners', authenticateJWT, listRunners)
 router.post('/runners/heartbeat', authenticateRunner, runnerHeartbeat)
 
 router.get('/runner/:id/metrics', authenticateJWT, runnerMetrics)
+
+/**
+ * @openapi
+ * /runner/{id}:
+ *   put:
+ *     tags:
+ *       - Runners
+ *     summary: Update a runner
+ *     description: Rename or change the status of a runner. Requires admin JWT authentication.
+ *     parameters:
+ *       - in: header
+ *         name: Authorization
+ *         required: true
+ *         description: Bearer token for admin user
+ *         schema:
+ *           type: string
+ *           example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Runner MongoDB ObjectId
+ *         schema:
+ *           type: string
+ *           example: 6650a1b2c3d4e5f6a7b8c9d0
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: New name for the runner
+ *                 example: prod-runner-02
+ *               status:
+ *                 type: string
+ *                 enum: [active, disabled]
+ *                 description: New status for the runner
+ *                 example: disabled
+ *     responses:
+ *       200:
+ *         description: Runner successfully updated
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Requires admin privileges
+ *       404:
+ *         description: Runner not found
+ *       409:
+ *         description: Runner name already in use
+ */
+router.put('/runner/:id', authenticateJWT, updateRunner)
+
+/**
+ * @openapi
+ * /runner/{id}:
+ *   delete:
+ *     tags:
+ *       - Runners
+ *     summary: Delete a runner
+ *     description: Permanently removes a runner and cleans up its metrics cache. Requires admin JWT authentication.
+ *     parameters:
+ *       - in: header
+ *         name: Authorization
+ *         required: true
+ *         description: Bearer token for admin user
+ *         schema:
+ *           type: string
+ *           example: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Runner MongoDB ObjectId
+ *         schema:
+ *           type: string
+ *           example: 6650a1b2c3d4e5f6a7b8c9d0
+ *     responses:
+ *       200:
+ *         description: Runner successfully deleted
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Requires admin privileges
+ *       404:
+ *         description: Runner not found
+ */
+router.delete('/runner/:id', authenticateJWT, deleteRunner)
 
 module.exports = router

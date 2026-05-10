@@ -1,7 +1,6 @@
 const { ROLES } = require('../utils/constants')
 const { UnauthorizedError, ValidationError } = require('../utils/appError')
 const runnerService = require('../services/runner.service')
-const { AppError } = require('../utils/appError')
 
 async function createRunner(req, res, next) {
   const userRole = req.user.role
@@ -74,9 +73,56 @@ async function runnerMetrics(req, res, next) {
   }
 }
 
+async function updateRunner(req, res, next) {
+  if (req.user.role !== ROLES.ADMIN) {
+    return next(new UnauthorizedError('You must be an admin to update runners'))
+  }
+
+  const { id } = req.params
+  const { name, status } = req.body
+
+  if (name !== undefined && !name.trim()) {
+    return next(new ValidationError('name cannot be empty'))
+  }
+
+  const VALID_STATUSES = ['active', 'disabled']
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return next(new ValidationError(`status must be one of: ${VALID_STATUSES.join(', ')}`))
+  }
+
+  const updates = {}
+  if (name !== undefined) updates.name = name.trim()
+  if (status !== undefined) updates.status = status
+
+  try {
+    const result = await runnerService.updateRunner(id, updates)
+    res.status(200).json({ message: 'Runner updated', ...result })
+  } catch (err) {
+    console.error(err)
+    return next(err)
+  }
+}
+
+async function deleteRunner(req, res, next) {
+  if (req.user.role !== ROLES.ADMIN) {
+    return next(new UnauthorizedError('You must be an admin to delete runners'))
+  }
+
+  const { id } = req.params
+  try {
+    const result = await runnerService.deleteRunner(id)
+    res.status(200).json({ message: 'Runner deleted', ...result })
+  } catch (err) {
+    console.error(err)
+    return next(err)
+  }
+}
+
 module.exports = {
   createRunner,
   listRunners,
   runnerHeartbeat,
-  runnerMetrics
+  runnerMetrics,
+  updateRunner,
+  deleteRunner,
 }

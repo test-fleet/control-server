@@ -74,14 +74,6 @@ export default function Layout() {
           </NavLink>
 
           <NavLink
-            to="/runners"
-            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-          >
-            <Server size={16} />
-            Runners
-          </NavLink>
-
-          <NavLink
             to="/scenes"
             className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           >
@@ -99,6 +91,15 @@ export default function Layout() {
 
           <div className="divider" style={{ margin: '8px 0' }} />
           <div className="sidebar-section-label">System</div>
+
+          <NavLink
+            to="/runners"
+            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+          >
+            <Server size={16} />
+            Runners
+          </NavLink>
+
           <NavLink
             to="/system"
             className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}

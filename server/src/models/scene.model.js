@@ -45,8 +45,7 @@ const SceneSchema = new mongoose.Schema({
   },
   orgId: {
     type: String,
-    required: true,
-    index: true
+    default: null,
   },
   cronSchedule: {
     type: String,
