@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { useState, Fragment } from 'react'
 
 const METHOD_COLORS = {
   GET:    { bg: 'rgba(0,200,120,0.12)',  color: '#00c878' },
@@ -64,6 +64,21 @@ function SectionLabel({ children }) {
   )
 }
 
+function ToggleHeadersBtn({ show, onToggle, count }) {
+  if (!count) return null
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onToggle() }}
+      style={{
+        fontSize: 10, fontFamily: 'monospace', color: 'var(--blue)',
+        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+      }}
+    >
+      {show ? 'hide' : `${count} header${count !== 1 ? 's' : ''}`}
+    </button>
+  )
+}
+
 function HeaderTable({ headers }) {
   const entries = Object.entries(headers || {}).filter(([, v]) => v != null)
   if (entries.length === 0) return null
@@ -81,64 +96,44 @@ function HeaderTable({ headers }) {
   )
 }
 
-function FrameDetail({ frame }) {
+export function FrameDetail({ frame }) {
+  const [showReqHeaders, setShowReqHeaders] = useState(false)
+  const [showResHeaders, setShowResHeaders] = useState(false)
+  const [showBody, setShowBody] = useState(false)
+
   const assertions = frame.assertions || []
   const failedCount = assertions.filter(a => !a.passed).length
+  const reqHeaderCount = Object.keys(frame.request?.headers || {}).length
+  const resHeaderCount = Object.keys(frame.response?.headers || {}).length
 
   return (
     <div style={{
       padding: '12px 14px 14px',
       marginBottom: 3,
-      borderRadius: '0 0 4px 4px',
+      borderRadius: '0 0 8px 8px',
       background: 'var(--surface)',
       border: '1px solid var(--border-bright)',
       borderTop: 'none',
     }}>
 
-      {/* Request */}
-      <div style={{ marginBottom: 14 }}>
-        <SectionLabel>Request</SectionLabel>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <MethodBadge method={frame.request?.method} />
-          <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text)', wordBreak: 'break-all', lineHeight: 1.5 }}>
-            {frame.request?.url}
-          </span>
+      {/* Error — shown first when present, very prominent */}
+      {frame.error && (
+        <div style={{
+          marginBottom: 12, padding: '8px 10px', borderRadius: 8,
+          background: 'rgba(240,96,96,0.06)', border: '1px solid rgba(240,96,96,0.25)',
+        }}>
+          <SectionLabel>Error</SectionLabel>
+          <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--peach)', wordBreak: 'break-word', lineHeight: 1.6 }}>
+            {frame.error}
+          </div>
         </div>
-        <HeaderTable headers={frame.request?.headers} />
-      </div>
+      )}
 
-      {/* Response */}
-      <div style={{ marginBottom: assertions.length > 0 || frame.error ? 14 : 0 }}>
-        <SectionLabel>Response</SectionLabel>
-        {frame.response?.statusCode ? (
-          <>
-            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: statusCodeColor(frame.response.statusCode) }}>
-                {frame.response.statusCode}
-              </span>
-              <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-                {frame.response.durationMs}ms
-              </span>
-              {frame.response.bodySize > 0 && (
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-                  {frame.response.bodySize >= 1024
-                    ? `${(frame.response.bodySize / 1024).toFixed(1)} KB`
-                    : `${frame.response.bodySize} B`}
-                </span>
-              )}
-            </div>
-            <HeaderTable headers={frame.response.headers} />
-          </>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>No response received</span>
-        )}
-      </div>
-
-      {/* Assertions */}
+      {/* Assertions — most important for understanding results */}
       {assertions.length > 0 && (
-        <div style={{ marginBottom: frame.error ? 14 : 0 }}>
+        <div style={{ marginBottom: 12 }}>
           <SectionLabel>
-            Assertions &mdash; {failedCount === 0 ? 'all passed' : `${failedCount} failed`}
+            Assertions — {failedCount === 0 ? 'all passed' : `${failedCount} of ${assertions.length} failed`}
           </SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {assertions.map((a, i) => (
@@ -146,8 +141,8 @@ function FrameDetail({ frame }) {
                 display: 'grid',
                 gridTemplateColumns: '14px 52px minmax(80px, 1fr) 70px minmax(60px, 1fr) 18px minmax(60px, 1fr)',
                 gap: 6, alignItems: 'center',
-                padding: '5px 8px',
-                borderRadius: 3,
+                padding: '6px 10px',
+                borderRadius: 6,
                 background: a.passed ? 'rgba(168,224,48,0.04)' : 'rgba(240,96,96,0.06)',
                 border: `1px solid ${a.passed ? 'rgba(168,224,48,0.12)' : 'rgba(240,96,96,0.25)'}`,
                 fontSize: 11, fontFamily: 'monospace',
@@ -179,21 +174,79 @@ function FrameDetail({ frame }) {
         </div>
       )}
 
-      {/* Error */}
-      {frame.error && (
-        <div>
-          <SectionLabel>Error</SectionLabel>
-          <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--peach)', wordBreak: 'break-word', lineHeight: 1.6 }}>
-            {frame.error}
-          </div>
+      {/* Response — status prominent, headers behind toggle */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+          <SectionLabel>Response</SectionLabel>
+          <ToggleHeadersBtn show={showResHeaders} onToggle={() => setShowResHeaders(h => !h)} count={resHeaderCount} />
         </div>
-      )}
+        {frame.response?.statusCode ? (
+          <>
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: statusCodeColor(frame.response.statusCode) }}>
+                {frame.response.statusCode}
+              </span>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                {frame.response.durationMs}ms
+              </span>
+              {frame.response.bodySize > 0 && (
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                  {frame.response.bodySize >= 1024
+                    ? `${(frame.response.bodySize / 1024).toFixed(1)} KB`
+                    : `${frame.response.bodySize} B`}
+                </span>
+              )}
+              {frame.response.body != null && (
+                <button
+                  onClick={e => { e.stopPropagation(); setShowBody(b => !b) }}
+                  style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
+                >
+                  {showBody ? 'hide body' : 'body'}
+                </button>
+              )}
+            </div>
+            {showResHeaders && <HeaderTable headers={frame.response.headers} />}
+            {showBody && frame.response.body != null && (
+              <pre style={{
+                marginTop: 8, padding: '8px 10px', borderRadius: 8,
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                fontSize: 11, fontFamily: 'monospace', color: 'var(--text-dim)',
+                overflowX: 'auto', maxHeight: 300, overflowY: 'auto',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.5,
+              }}>
+                {frame.response.bodyJson != null
+                  ? JSON.stringify(frame.response.bodyJson, null, 2)
+                  : frame.response.body}
+              </pre>
+            )}
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>No response received</span>
+        )}
+      </div>
+
+      {/* Request — method+URL visible, headers behind toggle */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+          <SectionLabel>Request</SectionLabel>
+          <ToggleHeadersBtn show={showReqHeaders} onToggle={() => setShowReqHeaders(h => !h)} count={reqHeaderCount} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <MethodBadge method={frame.request?.method} />
+          <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text)', wordBreak: 'break-all', lineHeight: 1.5 }}>
+            {frame.request?.url}
+          </span>
+        </div>
+        {showReqHeaders && <HeaderTable headers={frame.request?.headers} />}
+      </div>
     </div>
   )
 }
 
 export function FrameResultRow({ frame, expanded, onToggle }) {
   const color = frameStatusColor(frame.status)
+  const assertions = frame.assertions || []
+  const failedAssertions = assertions.filter(a => !a.passed)
 
   return (
     <Fragment>
@@ -202,7 +255,7 @@ export function FrameResultRow({ frame, expanded, onToggle }) {
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '5px 10px',
-          borderRadius: expanded ? '4px 4px 0 0' : 4,
+          borderRadius: expanded ? '8px 8px 0 0' : 8,
           marginBottom: expanded ? 0 : 2,
           background: expanded ? 'var(--surface-hover)' : 'var(--surface-raised)',
           border: `1px solid ${expanded ? 'var(--border-bright)' : 'var(--border)'}`,
@@ -221,6 +274,11 @@ export function FrameResultRow({ frame, expanded, onToggle }) {
         <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {frame.name}
         </span>
+        {failedAssertions.length > 0 && (
+          <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--error)', flexShrink: 0, background: 'rgba(240,96,96,0.08)', padding: '2px 7px', borderRadius: 5, border: '1px solid rgba(240,96,96,0.2)' }}>
+            {failedAssertions.length} failed
+          </span>
+        )}
         <span style={{ fontSize: 11, fontFamily: 'monospace', flexShrink: 0, color: statusCodeColor(frame.response?.statusCode) }}>
           {frame.status === 'error' && !frame.response?.statusCode ? 'ERR' : (frame.response?.statusCode || '—')}
         </span>

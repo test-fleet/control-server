@@ -110,6 +110,8 @@ const router = express.Router()
  *       404:
  *         description: Scene not found
  */
+router.post('/frames/test', authenticateJWT, frameController.testFrame)
+
 router.post('/scenes/:sceneId/frames', authenticateJWT, frameController.createFrame)
 
 /**

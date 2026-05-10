@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Server, Clapperboard, Users, LogOut, Zap, Activity, PlayCircle } from 'lucide-react'
+import { LayoutDashboard, Server, Clapperboard, Users, LogOut, Zap, Activity, PlayCircle, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 
 export function UserAvatar({ user, size = 30 }) {
   const style = {
@@ -44,6 +45,7 @@ export function UserAvatar({ user, size = 30 }) {
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { theme, toggle } = useTheme()
 
   function handleLogout() {
     logout()
@@ -121,6 +123,12 @@ export default function Layout() {
         </nav>
 
         <div className="sidebar-footer">
+          <button className="theme-toggle" onClick={toggle} title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
+            {theme === 'light'
+              ? <><Moon size={13} />Dark mode</>
+              : <><Sun size={13} />Light mode</>
+            }
+          </button>
           <div className="sidebar-user">
             <UserAvatar user={user} size={30} />
             <div className="sidebar-user-info">

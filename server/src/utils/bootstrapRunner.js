@@ -2,23 +2,26 @@ const Runner = require('../models/runner.model')
 const { encryptSecret } = require('./crypto')
 
 async function bootstrapDevRunner() {
-  const masterKey = process.env.API_MASTER_KEY
-  const masterSecret = process.env.API_MASTER_SECRET
+  const runners = [
+    { name: 'dev-runner-a', keyId: process.env.API_KEY_A, secret: process.env.API_SECRET_A },
+    { name: 'dev-runner-b', keyId: process.env.API_KEY_B, secret: process.env.API_SECRET_B },
+  ]
 
-  let runner = await Runner.findOne({ keyId: masterKey })
- 
-  try {
-    if (!runner) {
-      const encryptedSecret = await encryptSecret(masterSecret)
-      await Runner.create({
-        name: "dev-runner",
-        createdBy: "server",
-        keyId: masterKey,
-        encryptedSecret: encryptedSecret
-      })
+  for (const { name, keyId, secret } of runners) {
+    if (!keyId || !secret) {
+      console.warn(`[bootstrap] skipping runner "${name}": missing keyId or secret env var`)
+      continue
     }
-  } catch (err) {
-    console.error("failed to bootstrap dev test runner.", err)
+    try {
+      const existing = await Runner.findOne({ keyId })
+      if (!existing) {
+        const encryptedSecret = await encryptSecret(secret)
+        await Runner.create({ name, createdBy: 'server', keyId, encryptedSecret })
+        console.log(`[bootstrap] registered runner "${name}"`)
+      }
+    } catch (err) {
+      console.error(`[bootstrap] failed to register runner "${name}":`, err)
+    }
   }
 }
 

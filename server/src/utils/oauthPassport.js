@@ -5,6 +5,7 @@ const GithubStrategy = require('passport-github2').Strategy
 const OktaStrategy = require('passport-okta-oauth').Strategy
 const { findOrCreateOAuthUser } = require('../services/auth.service')
 const { NotFoundError } = require('./appError')
+const User = require('../models/user.model')
 
 function setupPassport() {
   const provider = process.env.OAUTH_PROVIDER?.toLowerCase()
@@ -82,9 +83,13 @@ function setupPassport() {
 
   // Serialize user.id in session (or JWT)
   passport.serializeUser((user, done) => done(null, user.id))
-  passport.deserializeUser((id, done) => {
-    // TODO: fetch user from DB by id
-    done(null, { id })
+  passport.deserializeUser(async (id, done) => {
+    try {
+      const user = await User.findById(id)
+      done(null, user || false)
+    } catch (err) {
+      done(err)
+    }
   })
 }
 

@@ -39,10 +39,11 @@ const FrameResultSchema = new mongoose.Schema({
 }, { _id: false })
 
 const SceneResultSchema = new mongoose.Schema({
-  runId:       { type: String, required: true, index: true },
-  jobId:       { type: String, required: true, index: true },
-  sceneId:     { type: String, required: true },
-  runnerId:    { type: String, required: true },
+  runId:           { type: String, required: true, index: true },
+  jobId:           { type: String, required: true, index: true },
+  sceneId:         { type: String, required: true },
+  runnerId:        { type: String, required: true },
+  expectedRunners: { type: Number, default: 1 },
   startedAt:   { type: Date, required: true },
   completedAt: { type: Date, required: true },
   durationMs:  { type: Number, required: true },

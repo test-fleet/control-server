@@ -121,6 +121,6 @@ router.get('/runners', authenticateJWT, listRunners)
  */
 router.post('/runners/heartbeat', authenticateRunner, runnerHeartbeat)
 
-router.get('/runner/:id/metrics', authenticateRunner, runnerMetrics)
+router.get('/runner/:id/metrics', authenticateJWT, runnerMetrics)
 
 module.exports = router

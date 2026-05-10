@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Modal from '../components/Modal'
+import Pagination from '../components/Pagination'
 import Badge from '../components/Badge'
 import { UserAvatar } from '../components/Layout'
 
@@ -266,23 +267,7 @@ export default function Users() {
               </tbody>
             </table>
             {pages > 1 && (
-              <div className="pagination">
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  Previous
-                </button>
-                <span>Page {page} of {pages}</span>
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={page >= pages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Next
-                </button>
-              </div>
+              <Pagination page={page} totalPages={pages} onPageChange={setPage} />
             )}
           </div>
         )}

@@ -5,9 +5,6 @@ const { ROLES, STATUS } = require('../utils/constants')
 
 const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
-//!
-//! Must add some protection against a user deleting/editing their own account
-
 async function inviteUser(req, res, next) {
   const userRole = req.user.role
   if (userRole !== ROLES.ADMIN) {
@@ -75,6 +72,10 @@ async function editRole(req, res, next) {
     return next(new ValidationError('userId must be provided'))
   }
 
+  if (userId === req.user._id.toString()) {
+    return next(new UnauthorizedError('You cannot change your own role'))
+  }
+
   const updatedRole = req.body.role
   if (!updatedRole) {
     return next(new ValidationError('updated role must be provided'))
@@ -107,6 +108,10 @@ async function editStatus(req, res, next) {
     return next(new ValidationError('userId must be provided'))
   }
 
+  if (userId === req.user._id.toString()) {
+    return next(new UnauthorizedError('You cannot change your own status'))
+  }
+
   const updatedStatus = req.body.status.toLowerCase()
   if (!updatedStatus) {
     return next(new ValidationError('updated status must be provided'))
@@ -131,9 +136,17 @@ async function editStatus(req, res, next) {
 }
 
 async function deleteUser(req, res, next) {
+  if (req.user.role !== ROLES.ADMIN) {
+    return next(new UnauthorizedError('You must be an admin to delete users'))
+  }
+
   const userId = req.params.id
   if (!userId) {
     return next(new ValidationError('userId must be provided'))
+  }
+
+  if (userId === req.user._id.toString()) {
+    return next(new UnauthorizedError('You cannot delete your own account'))
   }
 
   try {

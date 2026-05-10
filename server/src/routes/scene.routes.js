@@ -1,6 +1,6 @@
 const express = require('express')
 const { authenticateJWT } = require('../middleware/auth')
-const { createScene, listAllScenes, listScene, updateScene, deleteScene } = require('../controllers/scene.controller')
+const { createScene, listAllScenes, listScene, updateScene, deleteScene, runScene } = require('../controllers/scene.controller')
 
 const router = express.Router()
 
@@ -207,5 +207,6 @@ router.put('/scene/:id', authenticateJWT, updateScene)
  *         description: Scene not found
  */
 router.delete('/scene/:id', authenticateJWT, deleteScene)
+router.post('/scenes/:id/run', authenticateJWT, runScene)
 
 module.exports = router

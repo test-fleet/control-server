@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
-import { Plus, RefreshCw, Timer, ChevronLeft, ChevronRight, MoreHorizontal, Trash2, ToggleLeft, ToggleRight, Save, Layers, Activity } from 'lucide-react'
+import { Plus, RefreshCw, MoreHorizontal, Trash2, ToggleLeft, ToggleRight, Save, Layers, Play, Settings } from 'lucide-react'
 import { api } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import Modal from '../components/Modal'
+import Pagination from '../components/Pagination'
 import Badge from '../components/Badge'
-import { FrameResultRow } from '../components/FrameDetail'
+import { FrameResultRow, FrameDetail } from '../components/FrameDetail'
 
 function formatDate(date) {
   if (!date) return '—'
@@ -22,6 +23,18 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50]
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
+const THRESHOLD_OPTIONS = [
+  { label: 'All runners',  value: 1.0, hint: 'Every active runner must pass' },
+  { label: 'Majority',     value: 0.5, hint: '50% or more must pass' },
+  { label: 'Any runner',   value: 0.0, hint: 'At least one runner must pass' },
+]
+
+function thresholdLabel(t) {
+  if (t == null || t >= 1.0) return 'All runners must pass'
+  if (t >= 0.5) return '≥50% of runners must pass'
+  return 'At least 1 runner must pass'
+}
+
 const FREQUENCY_OPTIONS = [
   { label: '1 minute',   value: 1    },
   { label: '5 minutes',  value: 5    },
@@ -36,17 +49,57 @@ const FREQUENCY_OPTIONS = [
 ]
 
 function buildCronSchedule(frequencyMinutes, createdAt = new Date()) {
+  const now = new Date(createdAt)
+  const minute = now.getMinutes()
+  const hour = now.getHours()
+
   if (frequencyMinutes === 1) return '* * * * *'
-  const minute = new Date(createdAt).getMinutes()
-  return `${minute}/${frequencyMinutes} * * * *`
+
+  if (frequencyMinutes < 60) {
+    const anchor = minute % frequencyMinutes
+    return `${anchor}/${frequencyMinutes} * * * *`
+  }
+
+  if (frequencyMinutes === 60) {
+    return `${minute} * * * *`
+  }
+
+  if (frequencyMinutes === 1440) {
+    return `${minute} ${hour} * * *`
+  }
+
+  // 3h, 6h, 12h — anchor to creation hour so firing pattern is consistent
+  const hourFreq = Math.floor(frequencyMinutes / 60)
+  const anchorHour = hour % hourFreq
+  return `${minute} ${anchorHour}/${hourFreq} * * *`
 }
 
 function detectFrequency(cron) {
   if (!cron) return 5
-  if (cron.trim() === '* * * * *') return 1
-  const step = parseInt(cron.split('/')[1])
-  const match = FREQUENCY_OPTIONS.find(o => o.value === step)
-  return match ? match.value : 5
+  const trimmed = cron.trim()
+  if (trimmed === '* * * * *') return 1
+
+  const parts = trimmed.split(' ')
+  const minPart = parts[0]
+  const hourPart = parts[1]
+
+  // Sub-hour: "anchor/freq * * * *"
+  if (minPart.includes('/') && hourPart === '*') {
+    return parseInt(minPart.split('/')[1])
+  }
+
+  // Hourly: "minute * * * *"
+  if (!minPart.includes('/') && hourPart === '*') {
+    return 60
+  }
+
+  // Multi-hour: "minute anchor/hourFreq * * *"
+  if (hourPart && hourPart.includes('/')) {
+    return parseInt(hourPart.split('/')[1]) * 60
+  }
+
+  // Daily: "minute hour * * *"
+  return 1440
 }
 
 // ── Path transform helpers (res.body. ↔ $.) ────────────────────────────────────
@@ -135,14 +188,14 @@ function ActionsMenu({ scene, onToggle, onDelete }) {
   const menuStyle = {
     position: 'fixed', top: pos?.top, right: pos?.right, zIndex: 200,
     background: 'var(--surface-raised)', border: '1px solid var(--border-bright)',
-    borderRadius: 4, padding: 4, minWidth: 160,
+    borderRadius: 10, padding: 4, minWidth: 160,
     boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
   }
 
   const itemStyle = (color = 'var(--text)') => ({
     display: 'flex', alignItems: 'center', gap: 8,
     width: '100%', padding: '7px 10px', background: 'none', border: 'none',
-    color, fontSize: 13, borderRadius: 3, cursor: 'pointer',
+    color, fontSize: 13, borderRadius: 6, cursor: 'pointer',
   })
 
   return (
@@ -192,7 +245,7 @@ function MethodBadge({ method }) {
   const c = METHOD_COLORS[method] || { bg: 'rgba(120,120,120,0.12)', color: 'var(--text-muted)' }
   return (
     <span style={{
-      display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+      display: 'inline-block', padding: '2px 7px', borderRadius: 5,
       fontSize: 10, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.06em',
       background: c.bg, color: c.color,
     }}>
@@ -318,32 +371,43 @@ function FrameFormBuilder({ value, onChange }) {
                   <span key={i} style={{ ...FIELD_LABEL, marginBottom: 0 }}>{h}</span>
                 ))}
               </div>
-              {value.assertions.map((as, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 90px 1fr 1fr 26px', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-                  <select className="form-select" style={INPUT_SM} value={as.type} onChange={e => updAssertion(i, 'type', e.target.value)}>
-                    <option value="status">status</option>
-                    <option value="json">json</option>
-                    <option value="header">header</option>
-                  </select>
-                  <select className="form-select" style={INPUT_SM} value={as.operator} onChange={e => updAssertion(i, 'operator', e.target.value)}>
-                    {[
-                      { value: 'eq',       label: '=' },
-                      { value: 'ne',       label: '≠' },
-                      { value: 'gt',       label: '>' },
-                      { value: 'gte',      label: '≥' },
-                      { value: 'lt',       label: '<' },
-                      { value: 'lte',      label: '≤' },
-                      { value: 'contains', label: 'contains' },
-                    ].map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
-                  </select>
-                  <input className="form-input" style={INPUT_SM} placeholder="200" value={as.expected} onChange={e => updAssertion(i, 'expected', e.target.value)} required />
-                  {as.type !== 'status'
-                    ? <input className="form-input" style={INPUT_SM} placeholder={as.type === 'json' ? 'res.body.field' : 'Header-Name'} value={as.source} onChange={e => updAssertion(i, 'source', e.target.value)} required />
-                    : <div />
-                  }
-                  <button type="button" className="btn btn--ghost btn--icon" style={{ color: 'var(--error)', width: 26, height: 26 }} onClick={() => removeAssertion(i)}><Trash2 size={12} /></button>
-                </div>
-              ))}
+              {value.assertions.map((as, i) => {
+                const allOps = [
+                  { value: 'eq',       label: '=' },
+                  { value: 'ne',       label: '≠' },
+                  { value: 'gt',       label: '>' },
+                  { value: 'gte',      label: '≥' },
+                  { value: 'lt',       label: '<' },
+                  { value: 'lte',      label: '≤' },
+                  { value: 'contains', label: 'contains' },
+                ]
+                const ops = as.type === 'status' ? allOps.filter(o => o.value !== 'contains') : allOps
+                const expectedPlaceholder = as.type === 'status' ? '200' : as.type === 'header' ? 'text value' : 'value'
+                const sourcePlaceholder = as.type === 'json' ? 'res.body.field' : 'Header-Name'
+                return (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 90px 1fr 1fr 26px', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+                    <select className="form-select" style={INPUT_SM} value={as.type} onChange={e => {
+                      const newType = e.target.value
+                      const updated = [...value.assertions]
+                      updated[i] = { ...updated[i], type: newType, expected: '', source: '' }
+                      onChange({ ...value, assertions: updated })
+                    }}>
+                      <option value="status">status</option>
+                      <option value="json">json</option>
+                      <option value="header">header</option>
+                    </select>
+                    <select className="form-select" style={INPUT_SM} value={as.operator} onChange={e => updAssertion(i, 'operator', e.target.value)}>
+                      {ops.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
+                    </select>
+                    <input className="form-input" style={INPUT_SM} placeholder={expectedPlaceholder} value={as.expected} onChange={e => updAssertion(i, 'expected', e.target.value)} />
+                    {as.type !== 'status'
+                      ? <input className="form-input" style={INPUT_SM} placeholder={sourcePlaceholder} value={as.source} onChange={e => updAssertion(i, 'source', e.target.value)} />
+                      : <div />
+                    }
+                    <button type="button" className="btn btn--ghost btn--icon" style={{ color: 'var(--error)', width: 26, height: 26 }} onClick={() => removeAssertion(i)}><Trash2 size={12} /></button>
+                  </div>
+                )
+              })}
             </>
         }
       </div>
@@ -359,34 +423,40 @@ function statusColor(status) {
   return 'var(--error)'
 }
 
-function timeAgo(dateStr) {
+function formatTimestamp(dateStr) {
   if (!dateStr) return '—'
-  const diff = Date.now() - new Date(dateStr).getTime()
+  const date = new Date(dateStr)
+  const diff = Date.now() - date.getTime()
   if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`
-  return formatDate(dateStr)
+  const isToday = new Date().toDateString() === date.toDateString()
+  const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const absolute = isToday
+    ? timeStr
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + timeStr
+  if (diff >= 7 * 86_400_000) return absolute
+  const relative = diff < 3_600_000
+    ? `${Math.floor(diff / 60_000)}m ago`
+    : diff < 86_400_000
+    ? `${Math.floor(diff / 3_600_000)}h ago`
+    : `${Math.floor(diff / 86_400_000)}d ago`
+  return `${absolute} (${relative})`
 }
-
-const DOT_SIZES = [12, 10, 9, 8, 7]
 
 // ── RunDots ───────────────────────────────────────────────────────────────────
 
 function RunDots({ runs, selectedIdx, onSelect }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       {runs.map((run, i) => {
-        const size = DOT_SIZES[i] ?? 6
         const selected = i === selectedIdx
         const color = statusColor(run.status)
         return (
           <div
             key={run.runId || i}
             onClick={() => onSelect(i)}
-            title={`${run.status} · ${timeAgo(run.completedAt)} · ${run.durationMs}ms`}
+            title={`${run.status} · ${formatTimestamp(run.completedAt)} · ${run.durationMs}ms`}
             style={{
-              width: size, height: size, borderRadius: '50%',
+              width: 9, height: 9, borderRadius: '50%',
               background: color,
               cursor: 'pointer',
               flexShrink: 0,
@@ -404,64 +474,126 @@ function RunDots({ runs, selectedIdx, onSelect }) {
 
 // ── ResultsSection ────────────────────────────────────────────────────────────
 
+function RunDetailInline({ runId }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [runnerIdx, setRunnerIdx] = useState(0)
+  const [expandedFrame, setExpandedFrame] = useState(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setRunnerIdx(0)
+    setExpandedFrame(null)
+    api.get(`/results/run/${runId}`)
+      .then(res => setData(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [runId])
+
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
+      <div className="spinner" style={{ width: 14, height: 14 }} />
+    </div>
+  )
+  if (!data) return (
+    <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No data available.</p>
+  )
+
+  const runners = data.runners || []
+  const safeIdx = Math.min(runnerIdx, runners.length - 1)
+  const runner = runners[safeIdx]
+
+  return (
+    <div>
+      {/* Aggregate bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '5px 10px', borderRadius: 7, marginBottom: 8,
+        background: 'var(--surface-hover)', border: '1px solid var(--border-bright)',
+        fontSize: 11, fontFamily: 'monospace',
+      }}>
+        <span style={{ color: statusColor(data.status) }}>●</span>
+        <span style={{ flex: 1, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {data.runId}
+        </span>
+        <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+          {data.passedRunners}/{data.expectedRunners} runners
+        </span>
+        <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{formatTimestamp(data.completedAt)}</span>
+        <span style={{ fontWeight: 700, color: statusColor(data.status), flexShrink: 0 }}>{data.status}</span>
+      </div>
+
+      {/* Runner picker */}
+      {runners.length > 0 && (
+        <div style={{ display: 'flex', gap: 5, overflowX: 'auto', marginBottom: 8 }}>
+          {runners.map((r, i) => (
+            <button
+              key={r.runnerId}
+              onClick={() => { setRunnerIdx(i); setExpandedFrame(null) }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                fontWeight: i === safeIdx ? 600 : 400,
+                border: '1px solid',
+                borderColor: i === safeIdx ? statusColor(r.status) : 'var(--border)',
+                background: i === safeIdx ? 'var(--surface-raised)' : 'transparent',
+                color: 'var(--text)',
+              }}
+            >
+              <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: statusColor(r.status) }} />
+              {r.runnerName}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Frames */}
+      {runner ? (
+        runner.frames?.length > 0 ? (
+          runner.frames.map((frame, i) => (
+            <FrameResultRow
+              key={frame.frameId || i}
+              frame={frame}
+              expanded={expandedFrame === i}
+              onToggle={() => setExpandedFrame(p => p === i ? null : i)}
+            />
+          ))
+        ) : (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+            No frame data recorded for this runner.
+          </p>
+        )
+      ) : (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No runners reported yet.</p>
+      )}
+    </div>
+  )
+}
+
 function ResultsSection({ sceneId, toast }) {
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [expandedFrameIdx, setExpandedFrameIdx] = useState(null)
 
   useEffect(() => {
     api.get(`/results/scene/${sceneId}/summary`)
       .then(data => setSummary(data))
-      .catch(() => {/* no results yet is fine */})
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [sceneId]) // eslint-disable-line
-
-  const sectionLabel = {
-    fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
-    textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace',
-  }
 
   const metaLabel = { fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }
   const metaValue = (color = 'var(--text-dim)') => ({ fontSize: 11, fontFamily: 'monospace', color })
 
-  const hasRuns = summary && summary.recentRuns && summary.recentRuns.length > 0
+  const hasRuns = summary?.recentRuns?.length > 0
   const selectedRun = hasRuns ? summary.recentRuns[selectedIdx] : null
 
   function selectRun(i) {
     setSelectedIdx(i)
-    setExpandedFrameIdx(null)
-  }
-
-  function toggleFrame(i) {
-    setExpandedFrameIdx(prev => prev === i ? null : i)
   }
 
   return (
-    <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Activity size={13} style={{ color: 'var(--text-muted)' }} />
-          <span style={sectionLabel}>Results</span>
-        </div>
-        {hasRuns && (
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ ...metaLabel }}>last pass</span>
-              <span style={metaValue(summary.lastPass ? 'var(--success)' : 'var(--text-muted)')}>
-                {summary.lastPass ? timeAgo(summary.lastPass.completedAt) : '—'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <span style={{ ...metaLabel }}>last fail</span>
-              <span style={metaValue(summary.lastFail ? 'var(--error)' : 'var(--text-muted)')}>
-                {summary.lastFail ? timeAgo(summary.lastFail.completedAt) : '—'}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
+    <div>
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
           <div className="spinner" style={{ width: 16, height: 16 }} />
@@ -472,52 +604,25 @@ function ResultsSection({ sceneId, toast }) {
         </p>
       ) : (
         <>
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
             <RunDots runs={summary.recentRuns} selectedIdx={selectedIdx} onSelect={selectRun} />
-          </div>
-
-          {selectedRun && (
-            <div>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                marginBottom: 8,
-                padding: '5px 10px',
-                borderRadius: 4,
-                background: 'var(--surface-hover)',
-                border: '1px solid var(--border-bright)',
-              }}>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: statusColor(selectedRun.status), flexShrink: 0 }}>
-                  {selectedRun.status === 'passed' ? '●' : '●'}
-                </span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-dim)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selectedRun.runId}
-                </span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0 }}>
-                  {timeAgo(selectedRun.completedAt)}
-                </span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0 }}>
-                  {selectedRun.durationMs}ms
-                </span>
-                <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: statusColor(selectedRun.status), flexShrink: 0 }}>
-                  {selectedRun.status}
+            <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginLeft: 'auto' }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <span style={metaLabel}>last pass</span>
+                <span style={metaValue(summary.lastPass ? 'var(--success)' : 'var(--text-muted)')}>
+                  {summary.lastPass ? formatTimestamp(summary.lastPass.completedAt) : '—'}
                 </span>
               </div>
-
-              {selectedRun.frames && selectedRun.frames.length > 0 ? (
-                selectedRun.frames.map((frame, i) => (
-                  <FrameResultRow
-                    key={frame.frameId || i}
-                    frame={frame}
-                    expanded={expandedFrameIdx === i}
-                    onToggle={() => toggleFrame(i)}
-                  />
-                ))
-              ) : (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  No frame data recorded for this run.
-                </p>
-              )}
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <span style={metaLabel}>last fail</span>
+                <span style={metaValue(summary.lastFail ? 'var(--error)' : 'var(--text-muted)')}>
+                  {summary.lastFail ? formatTimestamp(summary.lastFail.completedAt) : '—'}
+                </span>
+              </div>
             </div>
+          </div>
+          {selectedRun && (
+            <RunDetailInline runId={selectedRun.runId} />
           )}
         </>
       )}
@@ -525,9 +630,8 @@ function ResultsSection({ sceneId, toast }) {
   )
 }
 
-// staged/setStaged are lifted to SceneModal so the Edit button can guard against unsaved frames
-function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
-  const [open, setOpen] = useState(false)
+function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged, collapsible = true }) {
+  const [open, setOpen] = useState(true)
   const [frames, setFrames] = useState([])
   const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
@@ -539,6 +643,10 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
   const [expandedId, setExpandedId] = useState(null)
   const [expandedForm, setExpandedForm] = useState(null)
   const [savingFrame, setSavingFrame] = useState(false)
+  const [expandedTestResult, setExpandedTestResult] = useState(null)
+  const [expandedTesting, setExpandedTesting] = useState(false)
+  const [formTestResult, setFormTestResult] = useState(null)
+  const [formTesting, setFormTesting] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -603,13 +711,37 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
     }
   }
 
+  async function runTest(formValues, setTesting, setResult) {
+    setTesting(true)
+    setResult(null)
+    try {
+      const { assertions } = transformForApi({ assertions: formValues.assertions })
+      const res = await api.post('/frames/test', {
+        request: {
+          method: formValues.method,
+          url: formValues.url.trim(),
+          body: formValues.body?.trim() || '',
+          timeout: Math.floor(Number(formValues.timeout) * 1000),
+        },
+        assertions,
+      })
+      setResult(res.frame)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setTesting(false)
+    }
+  }
+
   function toggleExpand(frame) {
     if (expandedId === frame._id) {
       setExpandedId(null)
       setExpandedForm(null)
+      setExpandedTestResult(null)
     } else {
       setExpandedId(frame._id)
       setExpandedForm(frameToFormValues(frame))
+      setExpandedTestResult(null)
     }
   }
 
@@ -691,24 +823,32 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
     textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace',
   }
 
+  const isOpen = collapsible ? open : true
+
   return (
-    <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: open ? 10 : 0 }}>
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-        >
-          <Layers size={13} style={{ color: 'var(--text-muted)' }} />
-          <span style={sectionLabel}>Frames</span>
-          {frames.length > 0 && (
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-              ({frames.length}{staged.length > 0 ? ` + ${staged.length} pending` : ''})
-            </span>
-          )}
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
-        </button>
-        {open && (
+    <div style={collapsible ? { borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 16 } : {}}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isOpen ? 10 : 0 }}>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <Layers size={13} style={{ color: 'var(--text-muted)' }} />
+            <span style={sectionLabel}>Frames</span>
+            {frames.length > 0 && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                ({frames.length}{staged.length > 0 ? ` + ${staged.length} pending` : ''})
+              </span>
+            )}
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
+          </button>
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+            {frames.length > 0 ? `${frames.length} frame${frames.length !== 1 ? 's' : ''}${staged.length > 0 ? ` · ${staged.length} pending` : ''}` : ''}
+          </span>
+        )}
+        {isOpen && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             {staged.length > 0 && (
               <button className="btn btn--primary btn--sm" onClick={committing ? undefined : commitAll} disabled={committing} style={{ fontSize: 11, gap: 4 }}>
@@ -727,7 +867,7 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
         )}
       </div>
 
-      {!open ? null : loading ? (
+      {!isOpen ? null : loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
           <div className="spinner" style={{ width: 16, height: 16 }} />
         </div>
@@ -761,7 +901,7 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
                   onClick={() => { if (!isPending) toggleExpand(frame) }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '7px 10px', borderRadius: isExpanded ? '4px 4px 0 0' : 4,
+                    padding: '7px 10px', borderRadius: isExpanded ? '8px 8px 0 0' : 8,
                     marginBottom: isExpanded ? 0 : 4,
                     background: isExpanded ? 'var(--surface-hover)' : isPending ? 'rgba(0,200,240,0.04)' : 'var(--surface-raised)',
                     border: `1px ${isPending ? 'dashed' : 'solid'} ${isDragOver ? 'var(--blue)' : isExpanded ? 'var(--blue)' : isPending ? 'rgba(0,200,240,0.5)' : 'var(--border)'}`,
@@ -816,13 +956,24 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
                   <div style={{
                     padding: 14, marginBottom: 4,
                     border: '1px solid var(--blue)', borderTop: 'none',
-                    borderRadius: '0 0 4px 4px',
+                    borderRadius: '0 0 8px 8px',
                     background: 'var(--surface-raised)',
                   }}>
-                    <FrameFormBuilder value={expandedForm} onChange={setExpandedForm} />
+                    <FrameFormBuilder value={expandedForm} onChange={v => { setExpandedForm(v); setExpandedTestResult(null) }} />
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 12 }}>
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setExpandedId(null); setExpandedForm(null) }}>
+                      <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setExpandedId(null); setExpandedForm(null); setExpandedTestResult(null) }}>
                         Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        disabled={expandedTesting || !expandedForm.url.trim()}
+                        onClick={() => runTest(expandedForm, setExpandedTesting, setExpandedTestResult)}
+                      >
+                        {expandedTesting
+                          ? <><div className="spinner" style={{ width: 12, height: 12 }} />Testing…</>
+                          : '▶ Test'
+                        }
                       </button>
                       <button
                         type="button"
@@ -836,6 +987,11 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
                         }
                       </button>
                     </div>
+                    {expandedTestResult && (
+                      <div style={{ marginTop: 12 }}>
+                        <FrameDetail frame={expandedTestResult} />
+                      </div>
+                    )}
                   </div>
                 )}
               </Fragment>
@@ -844,19 +1000,35 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
 
           {showForm && (
             <div style={{
-              padding: 14, borderRadius: 4, border: '1px dashed var(--blue)',
+              padding: 14, borderRadius: 8, border: '1px dashed var(--blue)',
               background: 'rgba(0,200,240,0.04)',
               marginTop: allItems.length > 0 ? 8 : 0,
             }}>
-              <FrameFormBuilder value={form} onChange={setForm} />
+              <FrameFormBuilder value={form} onChange={v => { setForm(v); setFormTestResult(null) }} />
               <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 12 }}>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setShowForm(false); setForm({ ...BLANK_FRAME, extractors: [], assertions: [] }) }}>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setShowForm(false); setForm({ ...BLANK_FRAME, extractors: [], assertions: [] }); setFormTestResult(null) }}>
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  disabled={formTesting || !form.url.trim()}
+                  onClick={() => runTest(form, setFormTesting, setFormTestResult)}
+                >
+                  {formTesting
+                    ? <><div className="spinner" style={{ width: 12, height: 12 }} />Testing…</>
+                    : '▶ Test'
+                  }
                 </button>
                 <button type="button" className="btn btn--primary btn--sm" disabled={!form.name.trim() || !form.url.trim()} onClick={stageFrame}>
                   <Plus size={12} />Stage Frame
                 </button>
               </div>
+              {formTestResult && (
+                <div style={{ marginTop: 12 }}>
+                  <FrameDetail frame={formTestResult} />
+                </div>
+              )}
             </div>
           )}
         </>
@@ -865,41 +1037,53 @@ function FramesSection({ sceneId, toast, staged, setStaged, onFramesChanged }) {
   )
 }
 
-// ── SceneModal (view → edit) ──────────────────────────────────────────────────
+// ── SceneModal ────────────────────────────────────────────────────────────────
 
-function SceneModal({ scene, onSave, onClose, saving, toast, onFramesChanged }) {
-  const [editing, setEditing] = useState(false)
+function SceneModal({ scene, onSave, onClose, saving, toast, onFramesChanged, onRunNow }) {
+  const [tab, setTab] = useState('results')
+  const [editingConfig, setEditingConfig] = useState(false)
   const [staged, setStaged] = useState([])
-  const [editBlocked, setEditBlocked] = useState(false)
+  const [closeBlocked, setCloseBlocked] = useState(false)
   const [form, setForm] = useState({
-    name:        scene.name || '',
-    description: scene.description || '',
-    timeout:     scene.timeout ? Math.round(scene.timeout / 60000) : 5,
-    frequency:   detectFrequency(scene.cronSchedule),
-    enabled:     scene.enabled ?? true,
+    name:          scene.name || '',
+    description:   scene.description || '',
+    timeout:       scene.timeout ? Math.round(scene.timeout / 60000) : 5,
+    frequency:     detectFrequency(scene.cronSchedule),
+    enabled:       scene.enabled ?? true,
+    passThreshold: scene.passThreshold ?? 1.0,
   })
+
+  function handleClose() {
+    if (staged.length > 0) {
+      setCloseBlocked(true)
+    } else {
+      onClose()
+    }
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
     if (!form.name.trim()) return
     onSave({
-      name:         form.name.trim(),
-      description:  form.description.trim(),
-      timeout:      Math.floor(Number(form.timeout) * 60000),
-      cronSchedule: buildCronSchedule(form.frequency),
-      enabled:      form.enabled,
+      name:          form.name.trim(),
+      description:   form.description.trim(),
+      timeout:       Math.floor(Number(form.timeout) * 60000),
+      cronSchedule:  buildCronSchedule(form.frequency),
+      enabled:       form.enabled,
+      passThreshold: form.passThreshold,
     })
   }
 
   function cancelEdit() {
     setForm({
-      name:        scene.name || '',
-      description: scene.description || '',
-      timeout:     scene.timeout ? Math.round(scene.timeout / 60000) : 5,
-      frequency:   detectFrequency(scene.cronSchedule),
-      enabled:     scene.enabled ?? true,
+      name:          scene.name || '',
+      description:   scene.description || '',
+      timeout:       scene.timeout ? Math.round(scene.timeout / 60000) : 5,
+      frequency:     detectFrequency(scene.cronSchedule),
+      enabled:       scene.enabled ?? true,
+      passThreshold: scene.passThreshold ?? 1.0,
     })
-    setEditing(false)
+    setEditingConfig(false)
   }
 
   const labelStyle = {
@@ -908,174 +1092,285 @@ function SceneModal({ scene, onSave, onClose, saving, toast, onFramesChanged }) 
     fontFamily: 'monospace', display: 'block', marginBottom: 6,
   }
 
-  const fieldValue = (children) => (
-    <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{children}</div>
-  )
+  const freqLabel = FREQUENCY_OPTIONS.find(o => o.value === detectFrequency(scene.cronSchedule))?.label ?? scene.cronSchedule
 
-  if (!editing) {
-    const freqLabel = FREQUENCY_OPTIONS.find(o => o.value === detectFrequency(scene.cronSchedule))?.label ?? scene.cronSchedule
-    return (
-      <>
-        <div className="modal-body">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px', marginBottom: 20 }}>
-            <div>
-              <label style={labelStyle}>Name</label>
-              {fieldValue(scene.name)}
-            </div>
-            <div>
-              <label style={labelStyle}>Status</label>
-              {fieldValue(<Badge variant={scene.enabled ? 'active' : 'disabled'}>{scene.enabled ? 'Enabled' : 'Disabled'}</Badge>)}
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Description</label>
-              {fieldValue(scene.description || <span style={{ color: 'var(--text-muted)' }}>No description</span>)}
-            </div>
-            <div>
-              <label style={labelStyle}>Frequency</label>
-              {fieldValue(freqLabel)}
-            </div>
-            <div>
-              <label style={labelStyle}>Timeout</label>
-              {fieldValue(formatTimeout(scene.timeout))}
-            </div>
-            <div>
-              <label style={labelStyle}>Created</label>
-              {fieldValue(formatDate(scene.createdAt))}
-            </div>
-          </div>
+  return (
+    <>
+      <div className="modal-body" style={{ padding: 0 }}>
 
-          <FramesSection
-            sceneId={scene.id}
-            toast={toast}
-            staged={staged}
-            setStaged={setStaged}
-            onFramesChanged={onFramesChanged}
-          />
-
-          <ResultsSection sceneId={scene.id} toast={toast} />
+        {/* Scene info bar */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Badge variant={scene.enabled ? 'active' : 'disabled'}>{scene.enabled ? 'Enabled' : 'Disabled'}</Badge>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>every {freqLabel}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>·</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{thresholdLabel(scene.passThreshold)}</span>
+          {scene.description && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {scene.description}</span>
+          )}
+          {onRunNow && (
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ marginLeft: 'auto', gap: 5, fontSize: 11 }}
+              onClick={onRunNow}
+            >
+              <Play size={11} />Run Now
+            </button>
+          )}
         </div>
-        <div className="modal-footer">
-          {editBlocked ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-              <span style={{ flex: 1, fontSize: 12, color: 'var(--warning, #f0b400)' }}>
-                {staged.length} unsaved frame{staged.length !== 1 ? 's' : ''} — save or discard before editing scene settings
-              </span>
-              <button className="btn btn--secondary btn--sm" onClick={() => setEditBlocked(false)}>Cancel</button>
-              <button className="btn btn--danger btn--sm" onClick={() => { setStaged([]); setEditBlocked(false); setEditing(true) }}>Discard &amp; Edit</button>
-            </div>
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+          {[['results', 'Results'], ['frames', 'Configure'], ['config', 'Settings']].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              style={{
+                padding: '9px 18px', fontSize: 12,
+                fontWeight: tab === id ? 600 : 400,
+                color: tab === id ? 'var(--text)' : 'var(--text-muted)',
+                background: 'none', border: 'none',
+                borderBottom: `2px solid ${tab === id ? 'var(--blue)' : 'transparent'}`,
+                cursor: 'pointer', marginBottom: -1,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ height: 440, overflowY: 'auto' }}>
+
+        {/* Results tab */}
+        {tab === 'results' && (
+          <div style={{ padding: '16px 20px' }}>
+            <ResultsSection sceneId={scene.id} toast={toast} />
+          </div>
+        )}
+
+        {/* Frames tab */}
+        {tab === 'frames' && (
+          <div style={{ padding: '16px 20px' }}>
+            <FramesSection
+              sceneId={scene.id}
+              toast={toast}
+              staged={staged}
+              setStaged={setStaged}
+              onFramesChanged={onFramesChanged}
+              collapsible={false}
+            />
+          </div>
+        )}
+
+        {/* Settings tab */}
+        {tab === 'config' && (
+        <div style={{ padding: '16px 20px' }}>
+
+        {/* ── Scene details ────────────────────────────────────────────────── */}
+        <div style={{ position: 'relative', marginBottom: 20 }}>
+          {editingConfig ? (
+            <form id="scene-details-form" onSubmit={handleSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
+                <div>
+                  <label style={labelStyle}>Name *</label>
+                  <input
+                    className="form-input"
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Timeout (minutes)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={form.timeout}
+                    onChange={e => setForm(f => ({ ...f, timeout: e.target.value }))}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Description</label>
+                  <textarea
+                    className="form-input"
+                    placeholder="What does this scene test?"
+                    value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    rows={2}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Frequency</label>
+                  <select
+                    className="form-select"
+                    value={form.frequency}
+                    onChange={e => setForm(f => ({ ...f, frequency: Number(e.target.value) }))}
+                    style={{ width: '100%' }}
+                  >
+                    {FREQUENCY_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Status</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[true, false].map(val => (
+                      <button
+                        key={String(val)}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, enabled: val }))}
+                        style={{
+                          flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 700,
+                          borderRadius: 6, cursor: 'pointer', border: '1px solid',
+                          fontFamily: 'monospace', letterSpacing: '0.06em', textTransform: 'uppercase',
+                          transition: 'all 0.12s',
+                          background: form.enabled === val ? (val ? 'var(--success-bg)' : 'var(--error-bg)') : 'transparent',
+                          borderColor: form.enabled === val ? (val ? 'var(--success)' : 'var(--error)') : 'var(--border)',
+                          color: form.enabled === val ? (val ? 'var(--success)' : 'var(--error)') : 'var(--text-muted)',
+                        }}
+                      >
+                        {val ? 'Enabled' : 'Disabled'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Pass Threshold</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {THRESHOLD_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        title={opt.hint}
+                        onClick={() => setForm(f => ({ ...f, passThreshold: opt.value }))}
+                        style={{
+                          flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 700,
+                          borderRadius: 6, cursor: 'pointer', border: '1px solid',
+                          fontFamily: 'monospace', transition: 'all 0.12s',
+                          background: form.passThreshold === opt.value ? 'rgba(0,160,240,0.12)' : 'transparent',
+                          borderColor: form.passThreshold === opt.value ? 'var(--blue)' : 'var(--border)',
+                          color: form.passThreshold === opt.value ? '#60e8ff' : 'var(--text-muted)',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </form>
           ) : (
             <>
-              <button className="btn btn--secondary" onClick={onClose}>Close</button>
-              <button className="btn btn--primary" onClick={() => staged.length > 0 ? setEditBlocked(true) : setEditing(true)}>
-                <Save size={14} />Edit
+              <button
+                type="button"
+                title="Edit scene settings"
+                onClick={() => setEditingConfig(true)}
+                style={{
+                  position: 'absolute', top: 0, right: 0,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', padding: 4, borderRadius: 6,
+                  display: 'flex', alignItems: 'center', transition: 'color 0.12s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--text)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                <Settings size={14} />
               </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px', paddingRight: 28 }}>
+                <div>
+                  <label style={labelStyle}>Name</label>
+                  <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{scene.name}</div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Status</label>
+                  <div style={{ fontSize: 13, paddingTop: 2 }}>
+                    <Badge variant={scene.enabled ? 'active' : 'disabled'}>{scene.enabled ? 'Enabled' : 'Disabled'}</Badge>
+                  </div>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>Description</label>
+                  <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>
+                    {scene.description || <span style={{ color: 'var(--text-muted)' }}>No description</span>}
+                  </div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Frequency</label>
+                  <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{freqLabel}</div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Timeout</label>
+                  <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{formatTimeout(scene.timeout)}</div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Created</label>
+                  <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{formatDate(scene.createdAt)}</div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Pass Threshold</label>
+                  <div style={{ fontSize: 13, color: 'var(--text)', paddingTop: 2 }}>{thresholdLabel(scene.passThreshold)}</div>
+                </div>
+              </div>
             </>
           )}
         </div>
-      </>
-    )
-  }
 
-  return (
-    <form onSubmit={handleSubmit}>
-      <div className="modal-body">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
-          <div>
-            <label style={labelStyle}>Name *</label>
-            <input
-              className="form-input"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              autoFocus
-              required
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Timeout (minutes)</label>
-            <input
-              className="form-input"
-              type="number"
-              min={1}
-              max={1440}
-              value={form.timeout}
-              onChange={e => setForm(f => ({ ...f, timeout: e.target.value }))}
-            />
-          </div>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={labelStyle}>Description</label>
-            <textarea
-              className="form-input"
-              placeholder="What does this scene test?"
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              rows={2}
-              style={{ resize: 'vertical' }}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Frequency</label>
-            <select
-              className="form-select"
-              value={form.frequency}
-              onChange={e => setForm(f => ({ ...f, frequency: Number(e.target.value) }))}
-              style={{ width: '100%' }}
-            >
-              {FREQUENCY_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Status</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[true, false].map(val => (
-                <button
-                  key={String(val)}
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, enabled: val }))}
-                  style={{
-                    flex: 1, padding: '7px 0', fontSize: 11, fontWeight: 700,
-                    borderRadius: 3, cursor: 'pointer', border: '1px solid',
-                    fontFamily: 'monospace', letterSpacing: '0.06em', textTransform: 'uppercase',
-                    transition: 'all 0.12s',
-                    background: form.enabled === val ? (val ? 'var(--success-bg)' : 'var(--error-bg)') : 'transparent',
-                    borderColor: form.enabled === val ? (val ? 'var(--success)' : 'var(--error)') : 'var(--border)',
-                    color: form.enabled === val ? (val ? 'var(--success)' : 'var(--error)') : 'var(--text-muted)',
-                  }}
-                >
-                  {val ? 'Enabled' : 'Disabled'}
-                </button>
-              ))}
-            </div>
-          </div>
+        </div>
+        )}
+
         </div>
       </div>
+
       <div className="modal-footer">
-        <button type="button" className="btn btn--secondary" onClick={cancelEdit}>Cancel</button>
-        <button type="submit" className="btn btn--primary" disabled={saving || !form.name.trim()}>
-          {saving
-            ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Saving…</>
-            : <><Save size={14} /> Save Changes</>
-          }
-        </button>
+        {closeBlocked ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+            <span style={{ flex: 1, fontSize: 12, color: 'var(--warning, #f0b400)' }}>
+              {staged.length} unsaved frame{staged.length !== 1 ? 's' : ''} will be lost — discard and close?
+            </span>
+            <button className="btn btn--secondary btn--sm" onClick={() => setCloseBlocked(false)}>Go Back</button>
+            <button className="btn btn--danger btn--sm" onClick={() => { setStaged([]); onClose() }}>Discard &amp; Close</button>
+          </div>
+        ) : tab === 'config' && editingConfig ? (
+          <>
+            <button type="button" className="btn btn--secondary" onClick={cancelEdit}>Cancel</button>
+            <button
+              type="submit"
+              form="scene-details-form"
+              className="btn btn--primary"
+              disabled={saving || !form.name.trim()}
+            >
+              {saving
+                ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Saving…</>
+                : <><Save size={14} /> Save Changes</>
+              }
+            </button>
+          </>
+        ) : (
+          <button className="btn btn--secondary" onClick={handleClose}>Close</button>
+        )}
       </div>
-    </form>
+    </>
   )
 }
 
 // ── CreateForm ────────────────────────────────────────────────────────────────
 
 function CreateForm({ onSubmit, onClose, submitting }) {
-  const [form, setForm] = useState({ name: '', description: '', timeout: 5, frequency: 5 })
+  const [form, setForm] = useState({ name: '', description: '', timeout: 5, frequency: 5, passThreshold: 1.0 })
 
   function handleSubmit(e) {
     e.preventDefault()
     if (!form.name.trim()) return
     onSubmit({
-      name:         form.name.trim(),
-      description:  form.description.trim(),
-      timeout:      Math.floor(Number(form.timeout) * 60000),
-      cronSchedule: buildCronSchedule(form.frequency),
+      name:          form.name.trim(),
+      description:   form.description.trim(),
+      timeout:       Math.floor(Number(form.timeout) * 60000),
+      cronSchedule:  buildCronSchedule(form.frequency),
+      passThreshold: form.passThreshold,
     })
   }
 
@@ -1127,6 +1422,32 @@ function CreateForm({ onSubmit, onClose, submitting }) {
             value={form.timeout}
             onChange={e => setForm(f => ({ ...f, timeout: e.target.value }))}
           />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Pass Threshold</label>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {THRESHOLD_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                title={opt.hint}
+                onClick={() => setForm(f => ({ ...f, passThreshold: opt.value }))}
+                style={{
+                  flex: 1, padding: '8px 0', fontSize: 11, fontWeight: 700,
+                  borderRadius: 6, cursor: 'pointer', border: '1px solid',
+                  fontFamily: 'monospace', transition: 'all 0.12s',
+                  background: form.passThreshold === opt.value ? 'rgba(0,160,240,0.12)' : 'transparent',
+                  borderColor: form.passThreshold === opt.value ? 'var(--blue)' : 'var(--border)',
+                  color: form.passThreshold === opt.value ? '#60e8ff' : 'var(--text-muted)',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            {THRESHOLD_OPTIONS.find(o => o.value === form.passThreshold)?.hint}
+          </p>
         </div>
       </div>
       <div className="modal-footer">
@@ -1203,6 +1524,17 @@ export default function Scenes() {
     }
   }
 
+  async function handleRunNow(scene) {
+    try {
+      const res = await api.post(`/scenes/${scene.id}/run`, {})
+      const runnerWord = res.expectedRunners === 1 ? 'runner' : 'runners'
+      toast.success(`Run triggered — dispatched to ${res.expectedRunners} ${runnerWord}`)
+      setTimeout(() => load(false), 1500)
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
   async function handleToggle(scene) {
     try {
       await api.put(`/scene/${scene.id}`, { enabled: !scene.enabled })
@@ -1238,8 +1570,10 @@ export default function Scenes() {
         </div>
         <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
           <button className="btn btn--secondary btn--sm" onClick={() => load()}>
-            <RefreshCw size={14} />
-            Refresh
+            <RefreshCw size={14} />Refresh
+          </button>
+          <button className="btn btn--primary btn--sm" onClick={() => setShowCreate(true)}>
+            <Plus size={13} />New Scene
           </button>
         </div>
       </div>
@@ -1279,96 +1613,97 @@ export default function Scenes() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Status</th>
+                  <th>Scene</th>
                   <th>Last Run</th>
-                  <th>Frames</th>
-                  <th>Frequency</th>
-                  <th>Timeout</th>
-                  <th style={{ width: 40 }}></th>
+                  <th>Schedule</th>
+                  <th style={{ width: 88 }}></th>
                 </tr>
               </thead>
               <tbody>
-                <AddRow colSpan={8} onClick={() => setShowCreate(true)} />
-                {scenes.map(scene => (
-                  <tr
-                    key={scene.id || scene._id}
-                    onClick={() => setEditTarget(scene)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{scene.name}</div>
-                    </td>
-                    <td>
-                      <Badge variant={scene.enabled ? 'active' : 'disabled'}>
-                        {scene.enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </td>
-                    <td>
-                      {scene.lastRunStatus ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{
-                            width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                            background: scene.lastRunStatus === 'passed' ? 'var(--success)' : scene.lastRunStatus === 'error' ? 'var(--peach)' : 'var(--error)',
-                          }} />
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                            {scene.lastRunAt ? (() => {
-                              const diff = Date.now() - new Date(scene.lastRunAt).getTime()
-                              if (diff < 60_000) return 'just now'
-                              if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-                              if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-                              return `${Math.floor(diff / 86_400_000)}d ago`
-                            })() : '—'}
-                          </span>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>—</span>
-                      )}
-                    </td>
-                    <td style={{ color: 'var(--text-dim)' }}>
-                      {scene.frameIds?.length || 0} frames
-                    </td>
-                    <td>
-                      <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
-                        {FREQUENCY_OPTIONS.find(o => o.value === detectFrequency(scene.cronSchedule))?.label ?? scene.cronSchedule ?? '—'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
-                        <Timer size={12} />
-                        {formatTimeout(scene.timeout)}
-                      </div>
-                    </td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <ActionsMenu
-                        scene={scene}
-                        onToggle={() => handleToggle(scene)}
-                        onDelete={() => setDeleteTarget(scene)}
-                      />
+                {scenes.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
+                      No scenes yet. Create one to get started.
                     </td>
                   </tr>
-                ))}
+                )}
+                {scenes.map(scene => {
+                  const statusColor = scene.lastRunStatus === 'passed' ? 'var(--success)' : scene.lastRunStatus === 'error' ? 'var(--peach)' : scene.lastRunStatus ? 'var(--error)' : null
+                  const freqLabel = FREQUENCY_OPTIONS.find(o => o.value === detectFrequency(scene.cronSchedule))?.label ?? scene.cronSchedule ?? '—'
+                  return (
+                    <tr
+                      key={scene.id || scene._id}
+                      onClick={() => setEditTarget(scene)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {scene.lastRunStatus && (
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: statusColor }} />
+                          )}
+                          <div>
+                            <div style={{ fontWeight: 500, color: scene.enabled ? 'var(--text)' : 'var(--text-muted)' }}>
+                              {scene.name}
+                            </div>
+                            {scene.description && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 340 }}>
+                                {scene.description}
+                              </div>
+                            )}
+                          </div>
+                          {!scene.enabled && (
+                            <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)', background: 'var(--surface-hover)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                              disabled
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        {scene.lastRunStatus ? (
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, fontFamily: 'monospace', color: statusColor }}>
+                              {scene.lastRunStatus}
+                            </div>
+                            {scene.lastRunAt && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 1 }}>
+                                {formatTimestamp(scene.lastRunAt)}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>No runs yet</span>
+                        )}
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+                          every {freqLabel}
+                        </span>
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                          <button
+                            className="btn btn--ghost btn--icon"
+                            title="Run now"
+                            onClick={() => handleRunNow(scene)}
+                            style={{ color: 'var(--blue)' }}
+                          >
+                            <Play size={13} />
+                          </button>
+                          <ActionsMenu
+                            scene={scene}
+                            onToggle={() => handleToggle(scene)}
+                            onDelete={() => setDeleteTarget(scene)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
 
             {totalPages > 1 && (
-              <div className="pagination">
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                >
-                  <ChevronLeft size={14} />Previous
-                </button>
-                <span>Page {page} of {totalPages}</span>
-                <button
-                  className="btn btn--ghost btn--sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Next<ChevronRight size={14} />
-                </button>
-              </div>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             )}
           </div>
         )}
@@ -1384,6 +1719,7 @@ export default function Scenes() {
             saving={submitting}
             toast={toast}
             onFramesChanged={() => load(false)}
+            onRunNow={() => handleRunNow(editTarget)}
           />
         </Modal>
       )}

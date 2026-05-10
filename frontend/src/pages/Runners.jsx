@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Clock, Copy, Check, RefreshCw, KeyRound, AlertTriangle, WifiOff } from 'lucide-react'
+import Pagination from '../components/Pagination'
 import {
   ResponsiveContainer, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,7 +12,7 @@ import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 
-const MAX_HISTORY = 40
+const MAX_HISTORY = 60
 
 // ── AddRow ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,20 @@ function formatDate(date) {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function fmt(v, decimals = 1) {
+  if (v === null || v === undefined) return '—'
+  return typeof v === 'number' ? v.toFixed(v < 10 ? 2 : decimals) : String(v)
+}
+
+function stats(vals) {
+  const clean = vals.filter(v => v !== null && v !== undefined)
+  if (!clean.length) return { min: null, avg: null, max: null }
+  const min = Math.min(...clean)
+  const max = Math.max(...clean)
+  const avg = clean.reduce((a, b) => a + b, 0) / clean.length
+  return { min, avg, max }
+}
+
 // ── CopyButton ─────────────────────────────────────────────────────────────
 
 function CopyButton({ value }) {
@@ -113,7 +128,7 @@ function ChartTooltip({ active, payload, label, unit }) {
     <div style={{
       background: 'var(--surface-raised)',
       border: '1px solid var(--border-bright)',
-      borderRadius: 3,
+      borderRadius: 8,
       padding: '7px 11px',
       fontSize: 12,
       fontFamily: 'monospace',
@@ -122,68 +137,70 @@ function ChartTooltip({ active, payload, label, unit }) {
       <div style={{ color: 'var(--text-muted)', marginBottom: 3, fontSize: 10 }}>{time}</div>
       <div style={{ color: payload[0]?.stroke, fontWeight: 700 }}>
         {value !== null && value !== undefined
-          ? `${typeof value === 'number' ? value.toFixed(value < 10 ? 2 : 1) : value}${unit}`
+          ? `${fmt(value)}${unit}`
           : '—'}
       </div>
     </div>
   )
 }
 
-// ── MetricCard ─────────────────────────────────────────────────────────────
+// ── MetricChart ────────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, unit, history, color }) {
-  // recharts needs [{time, v}, ...] shaped data
-  const chartData = (history || [])
-    .filter(p => p !== null && p !== undefined)
-    .map(p => ({ time: new Date(p.time).getTime(), v: p }))
-
-  // extract the scalar for this card from each history point
-  const keyMap = { 'CPU': 'cpu', 'Memory': 'mem', 'Heap': 'heap' }
-  const key = keyMap[label] || 'cpu'
+function MetricChart({ label, unit, dataKey, history, color, height = 90 }) {
   const points = (history || []).map(p => ({
     time: new Date(p.time).getTime(),
-    v: p[key],
+    v: p[dataKey],
   })).filter(p => p.v !== null && p.v !== undefined)
 
-  const current = value !== null && value !== undefined
-    ? `${typeof value === 'number' ? value.toFixed(value < 10 ? 2 : 1) : value}${unit}`
-    : '—'
-
   const allVals = points.map(p => p.v)
+  const { min, avg, max } = stats(allVals)
   const yMin = allVals.length ? Math.max(0, Math.min(...allVals) * 0.85) : 0
   const yMax = allVals.length ? Math.max(...allVals) * 1.15 : 10
 
+  const current = history?.length
+    ? history[history.length - 1]?.[dataKey]
+    : null
+
   return (
-    <div style={{ flex: 1, padding: '14px 16px', borderRight: '1px solid var(--border)', minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+    <div style={{ flex: 1, minWidth: 0, padding: '14px 16px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace' }}>
           {label}
         </span>
-        <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: '-0.03em' }}>
-          {current}
+        <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: '-0.03em' }}>
+          {fmt(current)}{current !== null && current !== undefined ? unit : ''}
         </span>
       </div>
 
+      {/* Min / avg / max */}
+      {allVals.length > 1 && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+          {[['min', min], ['avg', avg], ['max', max]].map(([k, v]) => (
+            <div key={k} style={{ display: 'flex', gap: 4, alignItems: 'baseline' }}>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'monospace', textTransform: 'uppercase' }}>{k}</span>
+              <span style={{ fontSize: 10, color: color, fontFamily: 'monospace', fontWeight: 600 }}>{fmt(v)}{unit}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {points.length >= 2 ? (
-        <ResponsiveContainer width="100%" height={110}>
-          <AreaChart data={points} margin={{ top: 4, right: 2, left: -28, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={height}>
+          <AreaChart data={points} margin={{ top: 2, right: 2, left: -28, bottom: 0 }}>
             <defs>
               <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={color} stopOpacity={0.15} />
+                <stop offset="5%"  stopColor={color} stopOpacity={0.18} />
                 <stop offset="95%" stopColor={color} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="var(--border)"
-              vertical={false}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="time"
               type="number"
               domain={['dataMin', 'dataMax']}
               scale="time"
-              tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               tick={{ fontSize: 9, fill: 'var(--text-muted)', fontFamily: 'monospace' }}
               tickLine={false}
               axisLine={{ stroke: 'var(--border)' }}
@@ -213,7 +230,7 @@ function MetricCard({ label, value, unit, history, color }) {
           </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <div style={{ height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
             {points.length === 0 ? 'No data' : 'Collecting…'}
           </span>
@@ -223,28 +240,19 @@ function MetricCard({ label, value, unit, history, color }) {
   )
 }
 
-// ── StatChip ───────────────────────────────────────────────────────────────
-
-function StatChip({ label, value }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 20px', borderRight: '1px solid var(--border)' }}>
-      <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace' }}>{label}</span>
-      <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: '-0.03em' }}>
-        {value !== null && value !== undefined ? value : '—'}
-      </span>
-    </div>
-  )
-}
-
 // ── RunnerMetrics (modal body content) ────────────────────────────────────
 
-function RunnerMetrics({ runner, history, threshold }) {
+function RunnerMetrics({ runner, history, threshold, heartbeatInterval }) {
   const { variant, label } = runnerDisplayStatus(runner, threshold)
   const isDisconnected = ['unresponsive', 'offline', 'disabled'].includes(variant)
 
   const pm = runner.performanceMetrics || {}
-  const hist = history || []
   const hasMetrics = pm.recordedAt !== null && pm.recordedAt !== undefined
+  const hist = history || []
+
+  const approxWindowMins = hist.length > 1
+    ? Math.round((new Date(hist[hist.length - 1].time) - new Date(hist[0].time)) / 60000)
+    : null
 
   return (
     <div style={{ position: 'relative' }}>
@@ -255,25 +263,38 @@ function RunnerMetrics({ runner, history, threshold }) {
         userSelect: isDisconnected ? 'none' : 'auto',
         transition: 'filter 0.2s, opacity 0.2s',
       }}>
-        {/* Chart row */}
+        {/* Main metric charts */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          <MetricCard label="CPU"    value={pm.cpuPercent}  unit="%"   history={hist} color="var(--lime)" />
-          <MetricCard label="Memory" value={pm.memUsedMb}   unit=" MB" history={hist} color="var(--blue)" />
-          <MetricCard label="Heap"   value={pm.heapAllocMb} unit=" MB" history={hist} color="var(--peach)" />
+          <MetricChart label="CPU"    unit="%"   dataKey="cpu"  history={hist} color="var(--lime)"  height={100} />
+          <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
+          <MetricChart label="Memory" unit=" MB" dataKey="mem"  history={hist} color="var(--blue)"  height={100} />
+          <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
+          <MetricChart label="Heap"   unit=" MB" dataKey="heap" history={hist} color="var(--peach)" height={100} />
         </div>
 
-        {/* Stat chips row */}
-        <div style={{ display: 'flex', alignItems: 'stretch' }}>
-          <StatChip label="Workers"     value={pm.workers} />
-          <StatChip label="Active Jobs" value={pm.activeJobs} />
+        {/* Secondary charts: workers + active jobs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+          <MetricChart label="Workers"     unit="" dataKey="workers"    history={hist} color="var(--purple, #a78bfa)" height={70} />
+          <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
+          <MetricChart label="Active Jobs" unit="" dataKey="activeJobs" history={hist} color="var(--teal, #2dd4bf)"  height={70} />
+          <div style={{ flex: 1 }} />
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 16,
+          padding: '8px 16px',
+          fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)',
+        }}>
           {pm.recordedAt && (
-            <div style={{ marginLeft: 'auto', padding: '10px 16px', display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                updated {formatRelative(pm.recordedAt)}
-                {hist.length > 0 && ` · ${hist.length} samples`}
-              </span>
-            </div>
+            <span>updated {formatRelative(pm.recordedAt)}</span>
           )}
+          {hist.length > 0 && (
+            <span>{hist.length} samples{approxWindowMins !== null ? ` · ~${approxWindowMins}m window` : ''}</span>
+          )}
+          <span style={{ marginLeft: 'auto' }}>
+            registered {formatDate(runner.createdAt)}
+          </span>
         </div>
       </div>
 
@@ -330,7 +351,21 @@ export default function Runners() {
 
   const limit = 20
 
-  const updateHistory = useCallback((list) => {
+  const mergeHistory = useCallback((id, incoming) => {
+    setMetricsHistory(prev => {
+      const existing = prev[id] || []
+      if (!incoming.length) return prev
+      const lastExisting = existing[existing.length - 1]?.time
+      const newPoints = existing.length === 0
+        ? incoming
+        : incoming.filter(p => !lastExisting || p.time > lastExisting)
+      if (!newPoints.length) return prev
+      const merged = [...existing, ...newPoints].slice(-MAX_HISTORY)
+      return { ...prev, [id]: merged }
+    })
+  }, [])
+
+  const updateHistoryFromPoll = useCallback((list) => {
     setMetricsHistory(prev => {
       const next = { ...prev }
       let changed = false
@@ -344,10 +379,10 @@ export default function Runners() {
         next[r._id] = [
           ...existing.slice(-(MAX_HISTORY - 1)),
           {
-            time:  pm.recordedAt,
-            cpu:   pm.cpuPercent,
-            mem:   pm.memUsedMb,
-            heap:  pm.heapAllocMb,
+            time:       pm.recordedAt,
+            cpu:        pm.cpuPercent,
+            mem:        pm.memUsedMb,
+            heap:       pm.heapAllocMb,
             workers:    pm.workers,
             activeJobs: pm.activeJobs,
           },
@@ -364,17 +399,28 @@ export default function Runners() {
         const list = data.data || []
         setRunners(list)
         setTotal(data.total || 0)
-        updateHistory(list)
+        updateHistoryFromPoll(list)
       })
       .catch(err => { if (showSpinner) toast.error(err.message) })
       .finally(() => { if (showSpinner) setLoading(false) })
-  }, [page, updateHistory]) // eslint-disable-line
+  }, [page, updateHistoryFromPoll]) // eslint-disable-line
 
   const load = useCallback(() => fetchRunners(true), [fetchRunners])
   const refresh = useCallback(() => fetchRunners(false), [fetchRunners])
 
   useEffect(() => { load() }, [load])
   useAutoRefresh(refresh, heartbeatInterval)
+
+  // Seed history from Redis when a runner modal is opened
+  useEffect(() => {
+    if (!selectedId) return
+    api.get(`/runner/${selectedId}/metrics`)
+      .then(data => {
+        const points = data.metrics || []
+        if (points.length) mergeHistory(selectedId, points)
+      })
+      .catch(() => {})
+  }, [selectedId]) // eslint-disable-line
 
   async function handleRegister(e) {
     e.preventDefault()
@@ -475,14 +521,9 @@ export default function Runners() {
                 </tbody>
               </table>
               {pages > 1 && (
-                <div className="pagination">
-                  <button className="btn btn--ghost btn--sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button>
-                  <span>Page {page} of {pages}</span>
-                  <button className="btn btn--ghost btn--sm" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>Next</button>
-                </div>
+                <Pagination page={page} totalPages={pages} onPageChange={setPage} />
               )}
             </div>
-
           </>
         )}
       </div>
@@ -562,6 +603,7 @@ export default function Runners() {
               runner={selectedRunner}
               history={metricsHistory[selectedRunner._id]}
               threshold={threshold}
+              heartbeatInterval={heartbeatInterval}
             />
           </Modal>
         )

@@ -1,9 +1,10 @@
 const Scene = require('../models/scene.model')
+const Frame = require('../models/frame.model')
 const { ConflictError, AppError, NotFoundError } = require('../utils/appError')
 const crypto = require('crypto')
 const scheduler = require('../utils/scheduler')
 
-async function createNewScene(name, desc, timeout, cronSchedule, orgId, userId) {
+async function createNewScene(name, desc, timeout, cronSchedule, orgId, userId, passThreshold = 1.0) {
   try {
     const scene = await Scene.create({
       id: `scene_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
@@ -16,6 +17,7 @@ async function createNewScene(name, desc, timeout, cronSchedule, orgId, userId) 
       orgId: orgId,
       enabled: true,
       createdBy: userId,
+      passThreshold,
     });
     scheduler.reload().catch(err => console.error('[scheduler] reload failed:', err))
     return { scene };
@@ -59,7 +61,7 @@ async function listSingleScene(id) {
 
 async function updateScene(id, updates) {
   const allowed = {}
-  const fields = ['name', 'description', 'timeout', 'cronSchedule', 'enabled', 'variables', 'frameIds']
+  const fields = ['name', 'description', 'timeout', 'cronSchedule', 'enabled', 'variables', 'frameIds', 'passThreshold']
   fields.forEach(f => { if (updates[f] !== undefined) allowed[f] = updates[f] })
 
   try {
@@ -82,6 +84,7 @@ async function deleteScene(id) {
   try {
     const scene = await Scene.findOneAndDelete({ id })
     if (!scene) throw new NotFoundError(`scene not found for id: ${id}`)
+    await Frame.deleteMany({ sceneId: id })
     scheduler.reload().catch(err => console.error('[scheduler] reload failed:', err))
     return { scene }
   } catch (err) {

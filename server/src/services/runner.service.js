@@ -1,11 +1,19 @@
 const Runner = require('../models/runner.model')
 const { ConflictError, AppError } = require('../utils/appError')
 const { generateApiKey, generateApiSecret, encryptSecret } = require('../utils/crypto')
+const { getPublisher } = require('../../config/redis')
+
+const METRICS_CAP = 60
+const METRICS_TTL = 3600 // 1 hour
+
+function metricsKey(runnerId) {
+  return `runner:metrics:${runnerId}`
+}
 
 async function createNewRunner(name, userId) {
   const existingRunner = await Runner.findOne({ name: name })
   if (existingRunner) throw new ConflictError('Runner with this name already exists')
- 
+
   const apiKey = generateApiKey()
   const apiSecret = generateApiSecret()
   const encryptedSecret = await encryptSecret(apiSecret)
@@ -26,7 +34,6 @@ async function createNewRunner(name, userId) {
     console.log(err)
     throw new AppError('failed to create runner', 500)
   }
-
 }
 
 async function listRunners(page, limit) {
@@ -40,7 +47,7 @@ async function listRunners(page, limit) {
       .skip(skip)
       .limit(limitNum)
       .exec()
-    
+
     const total = await Runner.countDocuments()
 
     return {
@@ -74,6 +81,25 @@ async function recordHeartbeat(runnerId, metrics) {
       activeJobs:  metrics.activeJobs  ?? null,
       recordedAt:  new Date(),
     }
+
+    const entry = JSON.stringify({
+      time:       new Date().toISOString(),
+      cpu:        metrics.cpuPercent  ?? null,
+      mem:        metrics.memUsedMb   ?? null,
+      heap:       metrics.heapAllocMb ?? null,
+      workers:    metrics.workers     ?? null,
+      activeJobs: metrics.activeJobs  ?? null,
+    })
+
+    try {
+      const client = getPublisher()
+      const key = metricsKey(runnerId)
+      await client.lPush(key, entry)
+      await client.lTrim(key, 0, METRICS_CAP - 1)
+      await client.expire(key, METRICS_TTL)
+    } catch (err) {
+      console.error('[runner] failed to push metrics to redis:', err)
+    }
   }
 
   try {
@@ -84,8 +110,21 @@ async function recordHeartbeat(runnerId, metrics) {
   }
 }
 
+async function getRunnerMetrics(runnerId) {
+  try {
+    const client = getPublisher()
+    const raw = await client.lRange(metricsKey(runnerId), 0, -1)
+    // lPush inserts newest first; reverse to get chronological order for charts
+    return raw.map(s => JSON.parse(s)).reverse()
+  } catch (err) {
+    console.error('[runner] failed to get metrics from redis:', err)
+    return []
+  }
+}
+
 module.exports = {
   createNewRunner,
   listRunners,
-  recordHeartbeat
+  recordHeartbeat,
+  getRunnerMetrics,
 }

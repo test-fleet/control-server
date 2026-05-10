@@ -1,6 +1,17 @@
 const { ValidationError } = require('../utils/appError')
 const resultsService = require('../services/results.service')
 
+async function getAggregatedRuns(req, res, next) {
+  const { limit, status, sceneId, page } = req.query
+  try {
+    const results = await resultsService.getAggregatedRuns(limit, status, sceneId, page)
+    res.status(200).json({ success: true, ...results })
+  } catch (err) {
+    console.error(err)
+    return next(err)
+  }
+}
+
 async function submitResult(req, res, next) {
   if (!req.body || typeof req.body !== 'object') {
     return next(new ValidationError('request body is required'))
@@ -53,10 +64,10 @@ async function getResultByRunId(req, res, next) {
 }
 
 async function getRecentResults(req, res, next) {
-  const { limit, status, sceneId } = req.query
+  const { limit, status, sceneId, page } = req.query
   try {
-    const results = await resultsService.getRecentResults(limit, status, sceneId)
-    res.status(200).json({ success: true, data: results })
+    const results = await resultsService.getRecentResults(limit, status, sceneId, page)
+    res.status(200).json({ success: true, ...results })
   } catch (err) {
     console.error(err)
     return next(err)
@@ -66,6 +77,7 @@ async function getRecentResults(req, res, next) {
 module.exports = {
   submitResult,
   getSceneResultsSummary,
+  getAggregatedRuns,
   getRecentResults,
   getResultsByScene,
   getResultByRunId,

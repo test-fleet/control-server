@@ -1,5 +1,6 @@
 const { ValidationError } = require('../utils/appError')
 const frameService = require('../services/frame.service')
+const { testFrame: testFrameRequest } = require('../services/frame.test.service')
 
 async function createFrame(req, res, next) {
   const { sceneId } = req.params
@@ -64,10 +65,23 @@ async function reorderFrames(req, res, next) {
   }
 }
 
+async function testFrame(req, res, next) {
+  const { request, assertions } = req.body
+  if (!request?.url) return next(new ValidationError('request.url is required'))
+  if (!request?.method) return next(new ValidationError('request.method is required'))
+  try {
+    const frame = await testFrameRequest({ request, assertions })
+    res.json({ frame })
+  } catch (err) {
+    return next(err)
+  }
+}
+
 module.exports = {
   createFrame,
   listFrames,
   updateFrame,
   deleteFrame,
   reorderFrames,
+  testFrame,
 }

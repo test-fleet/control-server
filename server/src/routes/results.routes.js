@@ -1,6 +1,6 @@
 const express = require('express')
 const { authenticateJWT, authenticateRunner } = require('../middleware/auth')
-const { submitResult, getSceneResultsSummary, getRecentResults, getResultsByScene, getResultByRunId } = require('../controllers/results.controller')
+const { submitResult, getSceneResultsSummary, getAggregatedRuns, getRecentResults, getResultsByScene, getResultByRunId } = require('../controllers/results.controller')
 const router = express.Router()
 
 /**
@@ -107,6 +107,7 @@ router.post('/results', authenticateRunner, submitResult)
  *       401:
  *         description: Unauthorized
  */
+router.get('/results/runs', authenticateJWT, getAggregatedRuns)
 router.get('/results/recent', authenticateJWT, getRecentResults)
 
 /**

@@ -1,6 +1,7 @@
 const { ROLES } = require('../utils/constants')
 const { UnauthorizedError, ValidationError } = require('../utils/appError')
 const runnerService = require('../services/runner.service')
+const { AppError } = require('../utils/appError')
 
 async function createRunner(req, res, next) {
   const userRole = req.user.role
@@ -63,9 +64,14 @@ async function runnerHeartbeat(req, res, next) {
 }
 
 async function runnerMetrics(req, res, next) {
-  const { id } = req.runner
-
-  // get buffered metrics for runner in redis
+  const { id } = req.params
+  try {
+    const metrics = await runnerService.getRunnerMetrics(id)
+    res.json({ success: true, metrics })
+  } catch (err) {
+    console.error(err)
+    return next(err)
+  }
 }
 
 module.exports = {

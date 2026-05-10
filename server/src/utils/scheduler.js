@@ -2,30 +2,54 @@ const cron = require('node-cron')
 const crypto = require('crypto')
 const Scene = require('../models/scene.model')
 const Frame = require('../models/frame.model')
+const Runner = require('../models/runner.model')
 const { getPublisher } = require('../../config/redis')
+const { setJobExpectedRunners } = require('./jobCache')
 
 // sceneId -> cron.ScheduledTask
 const jobs = new Map()
 
-async function reload() {
-  for (const task of jobs.values()) {
-    task.stop()
-  }
-  jobs.clear()
+// Mutex: only one reload may execute at a time.
+// If reload() is called while one is in-flight, _pendingReload is set so
+// a second pass runs immediately after, capturing any changes made during
+// the first pass.
+let _reloading = false
+let _pendingReload = false
 
-  let scenes
-  try {
-    scenes = await Scene.find({ enabled: true })
-  } catch (err) {
-    console.error('[scheduler] failed to load scenes:', err)
+async function reload() {
+  if (_reloading) {
+    _pendingReload = true
     return
   }
 
-  for (const scene of scenes) {
-    _register(scene)
-  }
+  _reloading = true
+  _pendingReload = false
 
-  console.log(`[scheduler] ${jobs.size} scene(s) scheduled`)
+  try {
+    for (const task of jobs.values()) {
+      task.stop()
+    }
+    jobs.clear()
+
+    let scenes
+    try {
+      scenes = await Scene.find({ enabled: true })
+    } catch (err) {
+      console.error('[scheduler] failed to load scenes:', err)
+      return
+    }
+
+    for (const scene of scenes) {
+      _register(scene)
+    }
+
+    console.log(`[scheduler] ${jobs.size} scene(s) scheduled`)
+  } finally {
+    _reloading = false
+    if (_pendingReload) {
+      reload()
+    }
+  }
 }
 
 function _register(scene) {
@@ -49,16 +73,20 @@ async function _fireJob(sceneId) {
   const scene = await Scene.findOne({ id: sceneId, enabled: true })
   if (!scene) return
 
-  const frames = await Frame.find({ sceneId, enabled: true }).sort({ order: 1 })
+  const [frames, expectedRunners] = await Promise.all([
+    Frame.find({ sceneId, enabled: true }).sort({ order: 1 }),
+    Runner.countDocuments({ status: 'active' }),
+  ])
 
-  const payload = _buildPayload(scene, frames)
+  const payload = _buildPayload(scene, frames, expectedRunners)
   const channel = process.env.REDIS_CHANNEL || 'testfleet:jobs'
 
+  setJobExpectedRunners(payload.runId, expectedRunners)
   await getPublisher().publish(channel, JSON.stringify(payload))
-  console.log(`[scheduler] published ${payload.jobId} for scene ${scene.id}`)
+  console.log(`[scheduler] published ${payload.jobId} for scene ${scene.id} (${expectedRunners} active runner(s))`)
 }
 
-function _buildPayload(scene, frames) {
+function _buildPayload(scene, frames, expectedRunners = 1) {
   const now = new Date().toISOString()
 
   const variables = {}
@@ -72,6 +100,7 @@ function _buildPayload(scene, frames) {
     jobId: `job_${crypto.randomUUID()}`,
     type: 'scene',
     runId: `run_${crypto.randomUUID()}`,
+    expectedRunners,
     createdAt: now,
     scene: {
       id: scene.id,
@@ -119,4 +148,22 @@ function _buildPayload(scene, frames) {
   }
 }
 
-module.exports = { reload }
+async function fireJobNow(sceneId) {
+  const scene = await Scene.findOne({ id: sceneId })
+  if (!scene) throw new Error(`Scene not found: ${sceneId}`)
+
+  const [frames, expectedRunners] = await Promise.all([
+    Frame.find({ sceneId, enabled: true }).sort({ order: 1 }),
+    Runner.countDocuments({ status: 'active' }),
+  ])
+
+  const payload = _buildPayload(scene, frames, expectedRunners)
+  const channel = process.env.REDIS_CHANNEL || 'testfleet:jobs'
+
+  setJobExpectedRunners(payload.runId, expectedRunners)
+  await getPublisher().publish(channel, JSON.stringify(payload))
+  console.log(`[scheduler] manual trigger: published ${payload.jobId} for scene ${scene.id} (${expectedRunners} runner(s))`)
+  return { runId: payload.runId, jobId: payload.jobId, expectedRunners }
+}
+
+module.exports = { reload, fireJobNow, _buildPayload }

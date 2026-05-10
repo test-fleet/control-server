@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "cookie-parser": "^1.4.7",
-    "react-router-dom": "^7.9.4"
-  }
-}

@@ -48,8 +48,10 @@ services:
       ALLOWED_DOMAINS: ${ALLOWED_DOMAINS}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       LOG_LEVEL: ${LOG_LEVEL}
-      API_MASTER_KEY: ${API_MASTER_KEY}
-      API_MASTER_SECRET: ${API_MASTER_SECRET}
+      API_KEY_A: ${API_KEY_A}
+      API_SECRET_A: ${API_SECRET_A}
+      API_KEY_B: ${API_KEY_B}
+      API_SECRET_B: ${API_SECRET_B}
       REDIS_URL: ${REDIS_URL}
       REDIS_CHANNEL: ${REDIS_CHANNEL}
       SERVER_URL: http://control-server:${PORT:-3000}
@@ -74,6 +76,7 @@ services:
   test-runner-a:
     image: ghcr.io/test-fleet/test-runner:latest
     # image: ghcr.io/test-fleet/test-runner:sha-033c1ce
+    platform: linux/amd64
     depends_on:
       control-server:
         condition: service_started
@@ -83,8 +86,8 @@ services:
     restart: unless-stopped
     environment:
       CONTROL_SERVER_URL: ${CONTROL_SERVER_URL}
-      API_KEY: ${API_MASTER_KEY}
-      API_SECRET: ${API_MASTER_SECRET}
+      API_KEY: ${API_KEY_A}
+      API_SECRET: ${API_SECRET_A}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
       REDIS_CHANNEL: ${REDIS_CHANNEL}
@@ -96,6 +99,7 @@ services:
   test-runner-b:
     image: ghcr.io/test-fleet/test-runner:latest
     # image: ghcr.io/test-fleet/test-runner:sha-033c1ce
+    platform: linux/amd64
     depends_on:
       control-server:
         condition: service_started
@@ -105,8 +109,8 @@ services:
     restart: unless-stopped
     environment:
       CONTROL_SERVER_URL: ${CONTROL_SERVER_URL}
-      API_KEY: ${API_MASTER_KEY}
-      API_SECRET: ${API_MASTER_SECRET}
+      API_KEY: ${API_KEY_B}
+      API_SECRET: ${API_SECRET_B}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
       REDIS_CHANNEL: ${REDIS_CHANNEL}

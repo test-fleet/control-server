@@ -1,5 +1,6 @@
-const { ValidationError } = require('../utils/appError')
+const { ValidationError, AppError } = require('../utils/appError')
 const sceneService = require('../services/scene.service')
+const scheduler = require('../utils/scheduler')
 
 async function createScene(req, res, next) {
   const sceneName = req.body.name
@@ -11,10 +12,10 @@ async function createScene(req, res, next) {
   if (!sceneCronSchedule) return next(new ValidationError('no cron schedule provided'))
 
   const userId = req.user.id
-  const orgId = 'this field doesnt exist'
+  const passThreshold = req.body.passThreshold ?? 1.0
 
   try {
-    const scene = await sceneService.createNewScene(sceneName, sceneDescription, sceneTimeout, sceneCronSchedule, orgId, userId)
+    const scene = await sceneService.createNewScene(sceneName, sceneDescription, sceneTimeout, sceneCronSchedule, null, userId, passThreshold)
     res.status(201).json({
       message: 'Scene created',
       scene: scene
@@ -59,7 +60,6 @@ async function updateScene(req, res, next) {
 }
 
 async function deleteScene(req, res, next) {
-  //! Cascade delete frames and all other artifacts
   const { id } = req.params
   try {
     const result = await sceneService.deleteScene(id)
@@ -70,10 +70,23 @@ async function deleteScene(req, res, next) {
   }
 }
 
+async function runScene(req, res, next) {
+  const { id } = req.params
+  try {
+    const result = await scheduler.fireJobNow(id)
+    res.json({ message: 'Run triggered', ...result })
+  } catch (err) {
+    if (err.message?.startsWith('Scene not found')) return next(new AppError(err.message, 404))
+    console.error(err)
+    return next(err)
+  }
+}
+
 module.exports = {
   createScene,
   listAllScenes,
   listScene,
   updateScene,
-  deleteScene
+  deleteScene,
+  runScene,
 }
