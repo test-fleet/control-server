@@ -43,6 +43,8 @@ async function listRunners(req, res, next) {
 
 async function runnerHeartbeat(req, res, next) {
   const { id } = req.runner
+  const instanceId = req.headers['x-instance-id'] || null
+  const runnerName = req.headers['x-runner-name'] || null
   const performanceMetrics = {
     cpuPercent:  req.body.cpu_percent,
     memUsedMb:   req.body.mem_used_mb,
@@ -52,7 +54,7 @@ async function runnerHeartbeat(req, res, next) {
   }
 
   try {
-    await runnerService.recordHeartbeat(id, performanceMetrics)
+    await runnerService.recordHeartbeat(id, performanceMetrics, instanceId, runnerName)
     res.status(204).json({
       "success": true
     });

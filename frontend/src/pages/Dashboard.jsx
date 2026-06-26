@@ -23,8 +23,9 @@ function statusColor(s) {
   return 'var(--border-bright)'
 }
 
-function runnerDisplayStatus(runner, threshold) {
+function runnerDisplayStatus(runner, threshold, isCredentialFlagged = false) {
   if (runner.status === 'disabled') return { variant: 'disabled', label: 'Disabled' }
+  if (isCredentialFlagged) return { variant: 'active-warn', label: 'Active' }
   if (!runner.lastSeen) return { variant: 'unresponsive', label: 'No heartbeat' }
   if (Date.now() - new Date(runner.lastSeen).getTime() > threshold) return { variant: 'unresponsive', label: 'Unresponsive' }
   return { variant: 'online', label: 'Active' }
@@ -64,7 +65,9 @@ export default function Dashboard() {
   useEffect(() => { fetchData(true) }, []) // eslint-disable-line
   useAutoRefresh(() => fetchData(false), heartbeatInterval)
 
-  const runnerList     = runners?.data || []
+  const runnerList        = runners?.data || []
+  const borrowedRunnerNames = new Set(runnerList.flatMap(r => r.credentialBorrowers || []))
+  const isCredentialFlagged = (r) => r.multipleInstances || borrowedRunnerNames.has(r.name)
   const sceneList      = scenes?.data  || []
   const activeRunners  = runnerList.filter(r => r.lastSeen && r.status !== 'disabled' && Date.now() - new Date(r.lastSeen).getTime() <= threshold).length
   const problemRunners = runnerList.filter(r => r.status === 'disabled' || !r.lastSeen || Date.now() - new Date(r.lastSeen).getTime() > threshold).length
@@ -226,9 +229,10 @@ export default function Dashboard() {
                     </thead>
                     <tbody>
                       {runnerList.slice(0, 6).map(runner => {
-                        const { variant, label } = runnerDisplayStatus(runner, threshold)
+                        const flagged = isCredentialFlagged(runner)
+                        const { variant, label } = runnerDisplayStatus(runner, threshold, flagged)
                         return (
-                          <tr key={runner._id}>
+                          <tr key={runner._id} style={{ borderLeft: flagged ? '3px solid var(--warning)' : undefined }}>
                             <td><div style={{ fontWeight: 500 }}>{runner.name}</div></td>
                             <td><Badge variant={variant}>{label}</Badge></td>
                             <td>

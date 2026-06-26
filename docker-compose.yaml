@@ -74,7 +74,7 @@ services:
       start_period: 60s
 
   test-runner-a:
-    image: ghcr.io/test-fleet/test-runner:latest
+    image: ghcr.io/test-fleet/test-runner:edge
     # image: ghcr.io/test-fleet/test-runner:sha-033c1ce
     platform: linux/amd64
     depends_on:
@@ -97,7 +97,7 @@ services:
       - testfleet-network
 
   test-runner-b:
-    image: ghcr.io/test-fleet/test-runner:latest
+    image: ghcr.io/test-fleet/test-runner:edge
     # image: ghcr.io/test-fleet/test-runner:sha-033c1ce
     platform: linux/amd64
     depends_on:

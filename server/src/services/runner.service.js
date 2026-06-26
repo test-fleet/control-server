@@ -5,9 +5,14 @@ const { getPublisher } = require('../../config/redis')
 
 const METRICS_CAP = 60
 const METRICS_TTL = 3600 // 1 hour
+const INSTANCE_STALE_SECS = 60 // remove instance if no heartbeat for this long
 
 function metricsKey(runnerId) {
   return `runner:metrics:${runnerId}`
+}
+
+function instancesKey(runnerId) {
+  return `runner:instances:${runnerId}`
 }
 
 async function createNewRunner(name, userId) {
@@ -63,17 +68,17 @@ async function listRunners(page, limit) {
   }
 }
 
-async function recordHeartbeat(runnerId, metrics) {
-  const runner = await Runner.findById(runnerId)
+async function recordHeartbeat(runnerId, metrics, instanceId, runnerName) {
+  const runner = await Runner.findById(runnerId).select('name').lean()
   if (!runner) {
     console.error('runner not found')
     throw new AppError('failed to retrieve runner', 500)
   }
 
-  runner.lastSeen = new Date()
+  const update = { lastSeen: new Date() }
 
   if (metrics) {
-    runner.performanceMetrics = {
+    update.performanceMetrics = {
       cpuPercent:  metrics.cpuPercent  ?? null,
       memUsedMb:   metrics.memUsedMb   ?? null,
       heapAllocMb: metrics.heapAllocMb ?? null,
@@ -102,8 +107,28 @@ async function recordHeartbeat(runnerId, metrics) {
     }
   }
 
+  if (instanceId) {
+    try {
+      const client = getPublisher()
+      const key = instancesKey(runnerId)
+      const nowSecs = Math.floor(Date.now() / 1000)
+      const member = runnerName ? `${instanceId}|${runnerName}` : instanceId
+      await client.zAdd(key, [{ score: nowSecs, value: member }])
+      await client.zRemRangeByScore(key, '-inf', nowSecs - INSTANCE_STALE_SECS)
+      const members = await client.zRange(key, 0, -1)
+      update.multipleInstances = members.length > 1
+      update.credentialBorrowers = [...new Set(
+        members
+          .map(m => m.split('|')[1])
+          .filter(name => name && name !== runner.name)
+      )]
+    } catch (err) {
+      console.error('[runner] failed to track instance in redis:', err)
+    }
+  }
+
   try {
-    await runner.save()
+    await Runner.findByIdAndUpdate(runnerId, { $set: update })
   } catch (err) {
     console.error(err)
     throw new AppError('failed to update runner heartbeat', 500)
@@ -154,8 +179,9 @@ async function deleteRunner(runnerId) {
     try {
       const client = getPublisher()
       await client.del(metricsKey(runnerId))
+      await client.del(instancesKey(runnerId))
     } catch (err) {
-      console.error('[runner] failed to clean up metrics key:', err)
+      console.error('[runner] failed to clean up runner keys:', err)
     }
     return { id: runnerId }
   } catch (err) {

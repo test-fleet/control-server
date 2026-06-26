@@ -51,8 +51,9 @@ function AddRow({ colSpan, label, onClick }) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function runnerDisplayStatus(runner, threshold) {
+function runnerDisplayStatus(runner, threshold, isCredentialFlagged = false) {
   if (runner.status === 'disabled') return { variant: 'disabled', label: 'Disabled' }
+  if (isCredentialFlagged) return { variant: 'active-warn', label: 'Active' }
   if (!runner.lastSeen) return { variant: 'unresponsive', label: 'Unresponsive' }
   if (Date.now() - new Date(runner.lastSeen).getTime() > threshold) return { variant: 'unresponsive', label: 'Unresponsive' }
   if (runner.status === 'offline') return { variant: 'offline', label: 'Offline' }
@@ -324,8 +325,8 @@ function MetricChart({ label, unit, dataKey, history, color, height = 90, heartb
 
 // ── RunnerMetrics (modal body content) ────────────────────────────────────
 
-function RunnerMetrics({ runner, history, threshold, heartbeatInterval }) {
-  const { variant, label } = runnerDisplayStatus(runner, threshold)
+function RunnerMetrics({ runner, history, threshold, heartbeatInterval, isCredentialFlagged = false }) {
+  const { variant, label } = runnerDisplayStatus(runner, threshold, isCredentialFlagged)
   const isDisconnected = ['unresponsive', 'offline', 'disabled'].includes(variant)
 
   const pm = runner.performanceMetrics || {}
@@ -567,6 +568,10 @@ export default function Runners() {
   const selectedRunner = runners.find(r => r._id === selectedId) || null
   const pages = Math.ceil(total / limit)
 
+  const borrowedRunnerNames = new Set(runners.flatMap(r => r.credentialBorrowers || []))
+  const isCredentialFlagged = (runner) => runner.multipleInstances || borrowedRunnerNames.has(runner.name)
+  const credentialFlaggedCount = runners.filter(isCredentialFlagged).length
+
   return (
     <>
       <div className="page-header">
@@ -589,6 +594,15 @@ export default function Runners() {
           </div>
         ) : (
           <>
+            {credentialFlaggedCount > 0 && (
+              <div className="alert alert--warning" style={{ marginBottom: 12 }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>
+                  <strong>API credentials are being shared between multiple runners.</strong>{' '}
+                  Each runner process should use its own unique API key and secret. Shared credentials corrupt per-runner metrics.
+                </span>
+              </div>
+            )}
             <div className="table-wrap">
               <table className="table">
                 <thead>
@@ -604,18 +618,22 @@ export default function Runners() {
                 <tbody>
                   {isAdmin && <AddRow colSpan={6} label="Register Runner" onClick={() => setShowRegister(true)} />}
                   {runners.map(runner => {
+                    const flagged = isCredentialFlagged(runner)
                     return (
                       <tr
                         key={runner._id}
                         onClick={() => setSelectedId(runner._id)}
-                        style={{ cursor: 'pointer' }}
+                        style={{
+                          cursor: 'pointer',
+                          borderLeft: flagged ? '3px solid var(--warning)' : undefined,
+                        }}
                       >
                         <td>
-                          <div style={{ fontWeight: 500 }}>{runner.name}</div>
+                          <span style={{ fontWeight: 500 }}>{runner.name}</span>
                         </td>
                         <td>
                           {(() => {
-                            const { variant, label } = runnerDisplayStatus(runner, threshold)
+                            const { variant, label } = runnerDisplayStatus(runner, threshold, flagged)
                             return <Badge variant={variant}>{label}</Badge>
                           })()}
                         </td>
@@ -768,13 +786,17 @@ export default function Runners() {
 
       {/* Runner metrics modal */}
       {selectedRunner && (() => {
-        const { variant, label } = runnerDisplayStatus(selectedRunner, threshold)
+        const flagged = isCredentialFlagged(selectedRunner)
+        const { variant, label } = runnerDisplayStatus(selectedRunner, threshold, flagged)
         return (
           <Modal
             title={
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{selectedRunner.name}</span>
                 <Badge variant={variant}>{label}</Badge>
+                {flagged && (
+                  <Badge variant="warning">Shared Credentials</Badge>
+                )}
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Clock size={10} />
                   {formatRelative(selectedRunner.lastSeen)}
@@ -789,6 +811,7 @@ export default function Runners() {
               history={metricsHistory[selectedRunner._id]}
               threshold={threshold}
               heartbeatInterval={heartbeatInterval}
+              isCredentialFlagged={flagged}
             />
           </Modal>
         )

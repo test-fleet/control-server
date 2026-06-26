@@ -182,6 +182,10 @@ input, select, textarea { font-family: inherit; }
 .badge--unresponsive::before { background: var(--error); }
 .badge--invited      { color: var(--warning); background: var(--warning-bg);  border: 1px solid var(--warning-border); }
 .badge--invited::before { background: var(--warning); }
+.badge--warning      { color: var(--warning); background: var(--warning-bg);  border: 1px solid var(--warning-border); }
+.badge--warning::before { background: var(--warning); }
+.badge--active-warn  { color: var(--warning); background: var(--warning-bg);  border: 1px solid var(--warning-border); }
+.badge--active-warn::before { background: var(--warning); }
 .badge--admin        { color: var(--blue);    background: var(--blue-dim);    border: 1px solid var(--blue-border); }
 .badge--admin::before { background: var(--blue); }
 .badge--user         { color: var(--text-dim); background: var(--offline-bg); border: 1px solid var(--offline-border); }

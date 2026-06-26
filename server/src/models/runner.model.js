@@ -45,6 +45,14 @@ const RunnerSchema = new mongoose.Schema({
     of: String,
     default: {},
   },
+  multipleInstances: {
+    type: Boolean,
+    default: false,
+  },
+  credentialBorrowers: {
+    type: [String],
+    default: [],
+  },
 });
 
 module.exports = mongoose.model('Runner', RunnerSchema);
