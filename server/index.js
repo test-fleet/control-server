@@ -2,6 +2,7 @@ const path = require("path");
 const express = require("express");
 const fs = require("fs");
 const os = require("os");
+const mongoose = require("mongoose");
 const cookieParser = require('cookie-parser')
 const passport = require('passport')
 
@@ -9,10 +10,8 @@ const { setupPassport } = require('./src/utils/oauthPassport')
 const { setupSwagger } = require('./src/utils/swaggerConfig')
 const { bootstrapAdminAccount } = require("./src/utils/bootstrapAdmin");
 const { bootstrapDevRunner } = require('./src/utils/bootstrapRunner')
-const { bootstrapServiceAccount } = require('./src/utils/bootstrapServiceAccount')
-const { bootstrapScene } = require('./src/utils/bootstrapScene')
 const { connectDatabase, disconnectDatabase } = require("./config/db");
-const { connectRedis, disconnectRedis } = require("./config/redis");
+const { connectRedis, disconnectRedis, getPublisher } = require("./config/redis");
 const scheduler = require("./src/utils/scheduler");
 const errorHandler = require("./src/middleware/errors");
 
@@ -35,8 +34,6 @@ async function startServer() {
       await bootstrapDevRunner()
     }
 
-    const adminToken = await bootstrapServiceAccount()
-    await bootstrapScene(adminToken)
     await scheduler.reload()
 
     const app = express();
@@ -47,6 +44,22 @@ async function startServer() {
     app.use(passport.initialize());
 
     setupSwagger(app);
+
+    app.get('/health', (_req, res) => {
+      res.status(200).json({ status: 'ok' });
+    });
+
+    app.get('/ready', (_req, res) => {
+      const mongoOk = mongoose.connection.readyState === 1;
+      let redisOk = false;
+      try {
+        redisOk = getPublisher().isOpen;
+      } catch {
+        redisOk = false;
+      }
+      const ok = mongoOk && redisOk;
+      res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'unavailable', mongo: mongoOk, redis: redisOk });
+    });
 
     app.get('/api/v1/metrics', authenticateJWT, (_req, res) => {
       const mem = process.memoryUsage();
