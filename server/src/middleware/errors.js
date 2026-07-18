@@ -1,3 +1,4 @@
+const multer = require('multer')
 const { AppError } = require('../utils/appError')
 
 function errorHandler(err, req, res, next) {
@@ -5,6 +6,14 @@ function errorHandler(err, req, res, next) {
     return res.status(err.statusCode).json({
       error: err.name,
       message: err.message
+    })
+  }
+
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Image must be 2MB or smaller' : err.message
+    return res.status(400).json({
+      error: 'ValidationError',
+      message
     })
   }
 

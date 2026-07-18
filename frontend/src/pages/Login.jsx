@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 
@@ -52,7 +52,7 @@ export default function Login() {
       <div className="login-card">
         <div className="login-logo">
           <div className="login-logo-icon">
-            <Zap size={18} color="#000" />
+            <img src="/api/v1/branding/image" alt="" />
           </div>
           <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em' }}>TestFleet</span>
         </div>

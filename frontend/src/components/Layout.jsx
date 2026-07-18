@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Server, Clapperboard, Users, LogOut, Zap, Activity, PlayCircle, Sun, Moon } from 'lucide-react'
+import { LayoutDashboard, Server, Clapperboard, Users, LogOut, Activity, PlayCircle, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 
@@ -57,7 +57,7 @@ export default function Layout() {
       <aside className="sidebar">
         <NavLink to="/dashboard" className="sidebar-logo">
           <div className="sidebar-logo-icon">
-            <Zap size={13} color="#000" />
+            <img src="/api/v1/branding/image" alt="" />
           </div>
           <span className="sidebar-logo-name">TestFleet</span>
         </NavLink>

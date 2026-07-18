@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Users, Activity, AlertCircle, Clock, BookOpen, Clapperboard, CheckCircle2, XCircle } from 'lucide-react'
+import { Users, Activity, AlertCircle, Clock, BookOpen, Clapperboard, CheckCircle2, XCircle, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import Badge from '../components/Badge'
+import BrandingModal from '../components/BrandingModal'
 
 function timeAgo(date) {
   if (!date) return null
@@ -47,6 +48,8 @@ export default function Dashboard() {
   const [users,   setUsers]   = useState(null)
   const [scenes,  setScenes]  = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showConfigure, setShowConfigure] = useState(false)
+  const isAdmin = user?.role === 'admin'
 
   function fetchData(showSpinner) {
     if (showSpinner) setLoading(true)
@@ -85,17 +88,31 @@ export default function Dashboard() {
           </h1>
           <p className="page-subtitle">Here's what's happening with your test fleet.</p>
         </div>
-        <a
-          href="/api/v1/docs"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn--ghost btn--sm"
-          style={{ marginLeft: 'auto', gap: 6, textDecoration: 'none' }}
-        >
-          <BookOpen size={13} />
-          API Docs
-        </a>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {isAdmin && (
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ gap: 6 }}
+              onClick={() => setShowConfigure(true)}
+            >
+              <Settings size={13} />
+              Configure
+            </button>
+          )}
+          <a
+            href="/api/v1/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn--ghost btn--sm"
+            style={{ gap: 6, textDecoration: 'none' }}
+          >
+            <BookOpen size={13} />
+            API Docs
+          </a>
+        </div>
       </div>
+
+      {showConfigure && <BrandingModal onClose={() => setShowConfigure(false)} />}
 
       <div className="page-body">
         {loading ? (
