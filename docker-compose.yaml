@@ -53,8 +53,6 @@ services:
       API_KEY_B: ${API_KEY_B}
       API_SECRET_B: ${API_SECRET_B}
       REDIS_URL: ${REDIS_URL}
-      REDIS_CHANNEL: ${REDIS_CHANNEL}
-      SERVER_URL: http://control-server:${PORT:-3000}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
@@ -90,7 +88,6 @@ services:
       API_SECRET: ${API_SECRET_A}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
-      REDIS_CHANNEL: ${REDIS_CHANNEL}
       MAX_WORKERS: ${MAX_WORKERS}
       RUNNER_NAME: "test-runner-a"
     networks:
@@ -113,7 +110,6 @@ services:
       API_SECRET: ${API_SECRET_B}
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
-      REDIS_CHANNEL: ${REDIS_CHANNEL}
       MAX_WORKERS: ${MAX_WORKERS}
       RUNNER_NAME: "test-runner-b"
     networks:

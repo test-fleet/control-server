@@ -10,6 +10,7 @@ const { setupPassport } = require('./src/utils/oauthPassport')
 const { setupSwagger } = require('./src/utils/swaggerConfig')
 const { bootstrapAdminAccount } = require("./src/utils/bootstrapAdmin");
 const { bootstrapDevRunner } = require('./src/utils/bootstrapRunner')
+const { bootstrapSampleScene } = require('./src/utils/bootstrapSampleScene')
 const { connectDatabase, disconnectDatabase } = require("./config/db");
 const { connectRedis, disconnectRedis, getPublisher } = require("./config/redis");
 const scheduler = require("./src/utils/scheduler");
@@ -33,6 +34,7 @@ async function startServer() {
 
     if (process.env.ENV.toLowerCase() == "dev") {
       await bootstrapDevRunner()
+      await bootstrapSampleScene()
     }
 
     await scheduler.reload()

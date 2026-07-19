@@ -45,8 +45,7 @@ function oauthCallback(req, res, next) {
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN }
       );
-      const frontendUrl = process.env.FRONTEND_URL || '';
-      res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+      res.redirect(`/auth/callback?token=${token}`);
     } catch (err) {
       next(err);
     }

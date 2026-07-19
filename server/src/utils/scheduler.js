@@ -5,6 +5,7 @@ const Frame = require('../models/frame.model')
 const Runner = require('../models/runner.model')
 const { getPublisher } = require('../../config/redis')
 const { setJobExpectedRunners } = require('./jobCache')
+const { REDIS_CHANNEL } = require('./constants')
 
 // sceneId -> cron.ScheduledTask
 const jobs = new Map()
@@ -78,11 +79,15 @@ async function _fireJob(sceneId) {
     Runner.countDocuments({ status: 'active' }),
   ])
 
+  if (frames.length === 0) {
+    console.warn(`[scheduler] skipping scene ${scene.id}: no enabled frames`)
+    return
+  }
+
   const payload = _buildPayload(scene, frames, expectedRunners)
-  const channel = process.env.REDIS_CHANNEL || 'testfleet:jobs'
 
   setJobExpectedRunners(payload.runId, expectedRunners)
-  await getPublisher().publish(channel, JSON.stringify(payload))
+  await getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload))
   console.log(`[scheduler] published ${payload.jobId} for scene ${scene.id} (${expectedRunners} active runner(s))`)
 }
 
@@ -157,11 +162,14 @@ async function fireJobNow(sceneId) {
     Runner.countDocuments({ status: 'active' }),
   ])
 
+  if (frames.length === 0) {
+    throw new Error(`Scene ${sceneId} has no enabled frames — nothing to run`)
+  }
+
   const payload = _buildPayload(scene, frames, expectedRunners)
-  const channel = process.env.REDIS_CHANNEL || 'testfleet:jobs'
 
   setJobExpectedRunners(payload.runId, expectedRunners)
-  await getPublisher().publish(channel, JSON.stringify(payload))
+  await getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload))
   console.log(`[scheduler] manual trigger: published ${payload.jobId} for scene ${scene.id} (${expectedRunners} runner(s))`)
   return { runId: payload.runId, jobId: payload.jobId, expectedRunners }
 }
