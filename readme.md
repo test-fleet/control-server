@@ -1,5 +1,7 @@
 # Welcome to the TestFleet GitHub!
 
+**Helm charts & deployment guide [here](https://github.com/test-fleet/helm-charts)**
+
 ## What is TestFleet?
 
 TestFleet is an open source API testing & monitoring tool. It runs scheduled, multi-step HTTP checks against your APIs. Users have the option to generate assertions on each request to validate responses against expected values. TestFleet also has the ability to extract variables from responses, allowing them to be referenced in future steps of the test. 
