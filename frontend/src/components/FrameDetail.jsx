@@ -1,12 +1,5 @@
 import { useState, Fragment } from 'react'
-
-const METHOD_COLORS = {
-  GET:    { bg: 'rgba(0,200,120,0.12)',  color: '#00c878' },
-  POST:   { bg: 'rgba(0,160,240,0.12)',  color: '#00a0f0' },
-  PUT:    { bg: 'rgba(240,180,0,0.12)',  color: '#f0b400' },
-  PATCH:  { bg: 'rgba(180,80,240,0.12)', color: '#b450f0' },
-  DELETE: { bg: 'rgba(240,60,60,0.12)',  color: '#f03c3c' },
-}
+import MethodBadge from './MethodBadge'
 
 const OP_LABEL = {
   eq: '=', equals: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤',
@@ -37,19 +30,6 @@ function fmtVal(v) {
   if (typeof v === 'string') return <span style={{ color: 'var(--lime)' }}>"{truncate(v, 60)}"</span>
   if (typeof v === 'boolean') return <span style={{ color: 'var(--peach)' }}>{String(v)}</span>
   return <span>{String(v)}</span>
-}
-
-function MethodBadge({ method }) {
-  const c = METHOD_COLORS[method] || { bg: 'rgba(120,120,120,0.12)', color: 'var(--text-muted)' }
-  return (
-    <span style={{
-      display: 'inline-block', padding: '1px 6px', borderRadius: 3,
-      fontSize: 10, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.06em',
-      background: c.bg, color: c.color, flexShrink: 0,
-    }}>
-      {method}
-    </span>
-  )
 }
 
 function SectionLabel({ children }) {
@@ -120,7 +100,7 @@ export function FrameDetail({ frame }) {
       {frame.error && (
         <div style={{
           marginBottom: 12, padding: '8px 10px', borderRadius: 8,
-          background: 'rgba(240,96,96,0.06)', border: '1px solid rgba(240,96,96,0.25)',
+          background: 'var(--error-bg)', border: '1px solid var(--error-border)',
         }}>
           <SectionLabel>Error</SectionLabel>
           <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--peach)', wordBreak: 'break-word', lineHeight: 1.6 }}>
@@ -143,8 +123,8 @@ export function FrameDetail({ frame }) {
                 gap: 6, alignItems: 'center',
                 padding: '6px 10px',
                 borderRadius: 6,
-                background: a.passed ? 'rgba(168,224,48,0.04)' : 'rgba(240,96,96,0.06)',
-                border: `1px solid ${a.passed ? 'rgba(168,224,48,0.12)' : 'rgba(240,96,96,0.25)'}`,
+                background: a.passed ? 'var(--lime-dim)' : 'var(--error-bg)',
+                border: `1px solid ${a.passed ? 'var(--lime-border)' : 'var(--error-border)'}`,
                 fontSize: 11, fontFamily: 'monospace',
               }}>
                 <span style={{ color: a.passed ? 'var(--success)' : 'var(--error)', fontWeight: 700 }}>

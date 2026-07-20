@@ -5,6 +5,7 @@ const Frame = require('../models/frame.model')
 const Runner = require('../models/runner.model')
 const { getPublisher } = require('../../config/redis')
 const { setJobExpectedRunners } = require('./jobCache')
+const { recordDispatch } = require('./dispatchTracker')
 const { REDIS_CHANNEL } = require('./constants')
 
 // sceneId -> cron.ScheduledTask
@@ -87,6 +88,7 @@ async function _fireJob(sceneId) {
   const payload = _buildPayload(scene, frames, expectedRunners)
 
   setJobExpectedRunners(payload.runId, expectedRunners)
+  recordDispatch({ runId: payload.runId, sceneId: scene.id, sceneName: scene.name, expectedRunners })
   await getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload))
   console.log(`[scheduler] published ${payload.jobId} for scene ${scene.id} (${expectedRunners} active runner(s))`)
 }
@@ -169,6 +171,7 @@ async function fireJobNow(sceneId) {
   const payload = _buildPayload(scene, frames, expectedRunners)
 
   setJobExpectedRunners(payload.runId, expectedRunners)
+  recordDispatch({ runId: payload.runId, sceneId: scene.id, sceneName: scene.name, expectedRunners })
   await getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload))
   console.log(`[scheduler] manual trigger: published ${payload.jobId} for scene ${scene.id} (${expectedRunners} runner(s))`)
   return { runId: payload.runId, jobId: payload.jobId, expectedRunners }

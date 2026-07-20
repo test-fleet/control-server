@@ -15,10 +15,10 @@ async function createScene(req, res, next) {
   const passThreshold = req.body.passThreshold ?? 1.0
 
   try {
-    const scene = await sceneService.createNewScene(sceneName, sceneDescription, sceneTimeout, sceneCronSchedule, null, userId, passThreshold)
+    const result = await sceneService.createNewScene(sceneName, sceneDescription, sceneTimeout, sceneCronSchedule, null, userId, passThreshold)
     res.status(201).json({
       message: 'Scene created',
-      scene: scene
+      ...result
     })
   } catch (err) {
     console.log(err)

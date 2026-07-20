@@ -24,6 +24,7 @@ const sceneRoutes = require('./src/routes/scene.routes')
 const frameRoutes = require('./src/routes/frame.routes')
 const resultsRoutes = require('./src/routes/results.routes')
 const brandingRoutes = require('./src/routes/branding.routes')
+const dashboardRoutes = require('./src/routes/dashboard.routes')
 
 async function startServer() {
   try {
@@ -97,6 +98,7 @@ async function startServer() {
     app.use('/api/v1', frameRoutes);
     app.use('/api/v1', resultsRoutes);
     app.use('/api/v1', brandingRoutes);
+    app.use('/api/v1', dashboardRoutes);
 
     const FRONTEND_DIST = path.resolve(process.cwd(), "frontend", "dist");
     app.use(express.static(FRONTEND_DIST));

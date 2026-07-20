@@ -89,7 +89,7 @@ services:
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
       MAX_WORKERS: ${MAX_WORKERS}
-      RUNNER_NAME: "test-runner-a"
+      RUNNER_NAME: "dev-runner-a"
     networks:
       - testfleet-network
 
@@ -111,7 +111,7 @@ services:
       HEARTBEAT_INTERVAL: ${HEARTBEAT_INTERVAL}
       REDIS_URL: ${REDIS_URL}
       MAX_WORKERS: ${MAX_WORKERS}
-      RUNNER_NAME: "test-runner-b"
+      RUNNER_NAME: "dev-runner-b"
     networks:
       - testfleet-network
 

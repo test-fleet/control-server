@@ -106,7 +106,7 @@ export default function System() {
             <div className="card">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <Timer size={13} style={{ color: 'var(--blue)' }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace' }}>Process</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-mono)' }}>Process</span>
               </div>
               <MetricRow label="Uptime"   value={formatUptime(metrics.uptime)} />
               <MetricRow label="Node"     value={metrics.node} />
@@ -118,7 +118,7 @@ export default function System() {
             <div className="card">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Cpu size={13} style={{ color: 'var(--lime)' }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace' }}>Heap Memory</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-mono)' }}>Heap Memory</span>
               </div>
               <MemBar used={metrics.memory.heapUsed} total={metrics.memory.heapTotal} color={heapColor} />
               <div style={{ marginTop: 2 }}>
@@ -132,7 +132,7 @@ export default function System() {
             <div className="card">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <MemoryStick size={13} style={{ color: 'var(--blue)' }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace' }}>System Memory</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-mono)' }}>System Memory</span>
               </div>
               <MemBar used={metrics.system.totalMem - metrics.system.freeMem} total={metrics.system.totalMem} color={sysColor} />
               <div style={{ marginTop: 2 }}>

@@ -54,7 +54,7 @@ async function createSampleScene() {
       ],
       assertions: [
         { type: 'status', operator: 'eq', expected: 200, source: 'status' },
-        { type: 'body', operator: 'eq', expected: 1, source: '$.id' },
+        { type: 'json', operator: 'eq', expected: 1, source: '$.id' },
       ],
     },
     {
@@ -73,8 +73,8 @@ async function createSampleScene() {
       ],
       assertions: [
         { type: 'status', operator: 'eq', expected: 200, source: 'status' },
-        { type: 'body', operator: 'gt', expected: 0, source: '$.id' },
-        { type: 'body', operator: 'contains', expected: '@', source: '$.email' },
+        { type: 'json', operator: 'gt', expected: 0, source: '$.id' },
+        { type: 'json', operator: 'contains', expected: '@', source: '$.email' },
       ],
     },
     {
@@ -89,7 +89,7 @@ async function createSampleScene() {
       ],
       assertions: [
         { type: 'status', operator: 'eq', expected: 200, source: 'status' },
-        { type: 'body', operator: 'eq', expected: 1, source: '$.[0].postId' },
+        { type: 'json', operator: 'eq', expected: 1, source: '$.[0].postId' },
       ],
     },
     {
@@ -104,7 +104,7 @@ async function createSampleScene() {
       ],
       assertions: [
         { type: 'status', operator: 'eq', expected: 200, source: 'status' },
-        { type: 'body', operator: 'eq', expected: 1, source: '$.[0].userId' },
+        { type: 'json', operator: 'eq', expected: 1, source: '$.[0].userId' },
       ],
     },
     {
@@ -124,7 +124,7 @@ async function createSampleScene() {
       extractors: [],
       assertions: [
         { type: 'status', operator: 'eq', expected: 201, source: 'status' },
-        { type: 'body', operator: 'eq', expected: 101, source: '$.id' },
+        { type: 'json', operator: 'eq', expected: 101, source: '$.id' },
       ],
     },
   ]

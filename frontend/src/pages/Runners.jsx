@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Clock, Copy, Check, RefreshCw, KeyRound, AlertTriangle, WifiOff, MoreHorizontal, Trash2, ToggleLeft, ToggleRight, Pencil } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Clock, Copy, Check, RefreshCw, KeyRound, AlertTriangle, Pencil, Trash2, ToggleLeft, ToggleRight, Server, Cpu, MemoryStick, Activity } from 'lucide-react'
 import Pagination from '../components/Pagination'
-import {
-  ResponsiveContainer, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-} from 'recharts'
+import ActionsMenu from '../components/ActionsMenu'
+import EmptyState from '../components/EmptyState'
+import StatusPulse from '../components/StatusPulse'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -12,52 +12,13 @@ import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import Modal from '../components/Modal'
 import Badge from '../components/Badge'
 
-const MAX_HISTORY = 60
-
-// ── AddRow ─────────────────────────────────────────────────────────────────
-
-function AddRow({ colSpan, label, onClick }) {
-  const [hover, setHover] = useState(false)
-  return (
-    <tr
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{ cursor: 'pointer' }}
-    >
-      <td
-        colSpan={colSpan}
-        style={{
-          textAlign: 'center',
-          padding: '11px 16px',
-          color: hover ? '#60e8ff' : 'var(--blue)',
-          background: hover ? 'var(--blue-dim)' : 'transparent',
-          borderBottom: `1px dashed ${hover ? 'var(--blue)' : 'rgba(0,200,240,0.35)'}`,
-          transition: 'color 0.12s, background 0.12s, border-color 0.12s',
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: '0.04em',
-          fontFamily: 'monospace',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <Plus size={13} />
-          {label}
-        </div>
-      </td>
-    </tr>
-  )
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
 function runnerDisplayStatus(runner, threshold, isCredentialFlagged = false) {
-  if (runner.status === 'disabled') return { variant: 'disabled', label: 'Disabled' }
-  if (isCredentialFlagged) return { variant: 'active-warn', label: 'Active' }
-  if (!runner.lastSeen) return { variant: 'unresponsive', label: 'Unresponsive' }
-  if (Date.now() - new Date(runner.lastSeen).getTime() > threshold) return { variant: 'unresponsive', label: 'Unresponsive' }
-  if (runner.status === 'offline') return { variant: 'offline', label: 'Offline' }
-  return { variant: 'online', label: 'Active' }
+  if (runner.status === 'disabled') return { variant: 'disabled', label: 'Disabled', color: 'var(--error)' }
+  if (isCredentialFlagged) return { variant: 'active-warn', label: 'Active', color: 'var(--warning)' }
+  if (!runner.lastSeen) return { variant: 'unresponsive', label: 'Unresponsive', color: 'var(--error)' }
+  if (Date.now() - new Date(runner.lastSeen).getTime() > threshold) return { variant: 'unresponsive', label: 'Unresponsive', color: 'var(--error)' }
+  if (runner.status === 'offline') return { variant: 'offline', label: 'Offline', color: 'var(--text-muted)' }
+  return { variant: 'online', label: 'Active', color: 'var(--lime)' }
 }
 
 function formatRelative(date) {
@@ -71,23 +32,9 @@ function formatRelative(date) {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-function formatDate(date) {
-  if (!date) return '—'
-  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function fmt(v, decimals = 1) {
+function fmt(v, unit = '') {
   if (v === null || v === undefined) return '—'
-  return typeof v === 'number' ? v.toFixed(v < 10 ? 2 : decimals) : String(v)
-}
-
-function stats(vals) {
-  const clean = vals.filter(v => v !== null && v !== undefined)
-  if (!clean.length) return { min: null, avg: null, max: null }
-  const min = Math.min(...clean)
-  const max = Math.max(...clean)
-  const avg = clean.reduce((a, b) => a + b, 0) / clean.length
-  return { min, avg, max }
+  return `${typeof v === 'number' ? v.toFixed(v < 10 ? 1 : 0) : v}${unit}`
 }
 
 // ── CopyButton ─────────────────────────────────────────────────────────────
@@ -119,296 +66,54 @@ function SecretReveal({ label, value }) {
   )
 }
 
-// ── ActionsMenu ────────────────────────────────────────────────────────────
+// ── Fleet card ─────────────────────────────────────────────────────────────
 
-function ActionsMenu({ runner, onRename, onToggle, onDelete }) {
-  const [pos, setPos] = useState(null)
-
-  function toggle(e) {
-    e.stopPropagation()
-    if (pos) { setPos(null); return }
-    const rect = e.currentTarget.getBoundingClientRect()
-    setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
-  }
-
-  function act(fn) { setPos(null); fn() }
-
-  const menuStyle = {
-    position: 'fixed', top: pos?.top, right: pos?.right, zIndex: 200,
-    background: 'var(--surface-raised)', border: '1px solid var(--border-bright)',
-    borderRadius: 10, padding: 4, minWidth: 160,
-    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-  }
-
-  const itemStyle = (color = 'var(--text)') => ({
-    display: 'flex', alignItems: 'center', gap: 8,
-    width: '100%', padding: '7px 10px', background: 'none', border: 'none',
-    color, fontSize: 13, borderRadius: 6, cursor: 'pointer',
-  })
+function FleetCard({ runner, threshold, flagged, isAdmin, onOpen, onRename, onToggle, onDelete }) {
+  const { variant, label, color } = runnerDisplayStatus(runner, threshold, flagged)
+  const pm = runner.performanceMetrics || {}
+  const isLive = variant === 'online'
 
   return (
-    <>
-      <button className="btn btn--ghost btn--icon" onClick={toggle} title="Actions">
-        <MoreHorizontal size={15} />
-      </button>
-      {pos && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setPos(null)} />
-          <div style={menuStyle}>
-            <button
-              style={itemStyle()}
-              onClick={() => act(onRename)}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              <Pencil size={13} />Rename
-            </button>
-            <button
-              style={itemStyle()}
-              onClick={() => act(onToggle)}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              {runner.status === 'disabled'
-                ? <><ToggleLeft size={13} />Enable</>
-                : <><ToggleRight size={13} />Disable</>
-              }
-            </button>
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-            <button
-              style={itemStyle('var(--error)')}
-              onClick={() => act(onDelete)}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--error-bg)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}
-            >
-              <Trash2 size={13} />Delete
-            </button>
-          </div>
-        </>
-      )}
-    </>
-  )
-}
-
-// ── Chart tooltip ──────────────────────────────────────────────────────────
-
-function ChartTooltip({ active, payload, label, unit }) {
-  if (!active || !payload?.length) return null
-  const value = payload[0]?.value
-  const time = label ? new Date(label).toLocaleTimeString() : ''
-  return (
-    <div style={{
-      background: 'var(--surface-raised)',
-      border: '1px solid var(--border-bright)',
-      borderRadius: 8,
-      padding: '7px 11px',
-      fontSize: 12,
-      fontFamily: 'monospace',
-      boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-    }}>
-      <div style={{ color: 'var(--text-muted)', marginBottom: 3, fontSize: 10 }}>{time}</div>
-      <div style={{ color: payload[0]?.stroke, fontWeight: 700 }}>
-        {value !== null && value !== undefined
-          ? `${fmt(value)}${unit}`
-          : '—'}
-      </div>
-    </div>
-  )
-}
-
-// ── MetricChart ────────────────────────────────────────────────────────────
-
-function MetricChart({ label, unit, dataKey, history, color, height = 90, heartbeatInterval = 30000 }) {
-  const now = Date.now()
-  const windowMs = MAX_HISTORY * heartbeatInterval
-  const xDomain = [now - windowMs, now]
-
-  const points = (history || []).map(p => ({
-    time: new Date(p.time).getTime(),
-    v: p[dataKey],
-  })).filter(p => p.v !== null && p.v !== undefined && p.time >= xDomain[0])
-
-  const allVals = points.map(p => p.v)
-  const { min, avg, max } = stats(allVals)
-  const yMin = allVals.length ? Math.max(0, Math.min(...allVals) * 0.85) : 0
-  const yMax = allVals.length ? Math.max(...allVals) * 1.15 : 10
-
-  const current = history?.length ? history[history.length - 1]?.[dataKey] : null
-  const isEmpty = points.length === 0
-
-  return (
-    <div style={{ flex: 1, minWidth: 0, padding: '14px 16px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'monospace' }}>
-          {label}
-        </span>
-        <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace', letterSpacing: '-0.03em' }}>
-          {fmt(current)}{current !== null && current !== undefined ? unit : ''}
-        </span>
-      </div>
-
-      {/* Min / avg / max */}
-      {allVals.length > 1 && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-          {[['min', min], ['avg', avg], ['max', max]].map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', gap: 4, alignItems: 'baseline' }}>
-              <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'monospace', textTransform: 'uppercase' }}>{k}</span>
-              <span style={{ fontSize: 10, color: color, fontFamily: 'monospace', fontWeight: 600 }}>{fmt(v)}{unit}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Always render the chart — empty window shows axes, data fills in from the right */}
-      <div style={{ position: 'relative' }}>
-        <ResponsiveContainer width="100%" height={height}>
-          <AreaChart data={points} margin={{ top: 2, right: 2, left: -28, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={color} stopOpacity={0.18} />
-                <stop offset="95%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-            <XAxis
-              dataKey="time"
-              type="number"
-              domain={xDomain}
-              scale="time"
-              tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              tick={{ fontSize: 9, fill: 'var(--text-muted)', fontFamily: 'monospace' }}
-              tickLine={false}
-              axisLine={{ stroke: 'var(--border)' }}
-              minTickGap={60}
-            />
-            <YAxis
-              domain={[yMin, yMax]}
-              tick={{ fontSize: 9, fill: 'var(--text-muted)', fontFamily: 'monospace' }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={v => v.toFixed(0)}
-            />
-            {!isEmpty && (
-              <Tooltip
-                content={<ChartTooltip unit={unit} />}
-                cursor={{ stroke: 'var(--border-bright)', strokeWidth: 1, strokeDasharray: '3 3' }}
-              />
-            )}
-            <Area
-              type="monotone"
-              dataKey="v"
-              stroke={isEmpty ? 'transparent' : color}
-              strokeWidth={1.5}
-              fill={isEmpty ? 'transparent' : `url(#grad-${label})`}
-              dot={false}
-              activeDot={isEmpty ? false : { r: 3, fill: color, stroke: 'var(--surface)', strokeWidth: 2 }}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-        {isEmpty && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none',
-          }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-              awaiting data
-            </span>
-          </div>
+    <div className={`fleet-card${flagged ? ' fleet-card--flagged' : ''}`} onClick={onOpen}>
+      <div className="fleet-card-top">
+        <StatusPulse color={color} live={isLive} />
+        <span className="fleet-card-name">{runner.name}</span>
+        {isAdmin && (
+          <span onClick={e => e.stopPropagation()}>
+            <ActionsMenu items={[
+              { label: 'Rename', icon: Pencil, onClick: onRename },
+              { label: runner.status === 'disabled' ? 'Enable' : 'Disable', icon: runner.status === 'disabled' ? ToggleLeft : ToggleRight, onClick: onToggle },
+              { divider: true },
+              { label: 'Delete', icon: Trash2, danger: true, onClick: onDelete },
+            ]} />
+          </span>
         )}
       </div>
-    </div>
-  )
-}
 
-// ── RunnerMetrics (modal body content) ────────────────────────────────────
+      <div style={{ display: 'flex', gap: 6 }}>
+        <Badge variant={variant}>{label}</Badge>
+        {flagged && <Badge variant="warning">Shared creds</Badge>}
+      </div>
 
-function RunnerMetrics({ runner, history, threshold, heartbeatInterval, isCredentialFlagged = false }) {
-  const { variant, label } = runnerDisplayStatus(runner, threshold, isCredentialFlagged)
-  const isDisconnected = ['unresponsive', 'offline', 'disabled'].includes(variant)
-
-  const pm = runner.performanceMetrics || {}
-  const hasMetrics = pm.recordedAt !== null && pm.recordedAt !== undefined
-  const hist = history || []
-
-  const approxWindowMins = hist.length > 1
-    ? Math.round((new Date(hist[hist.length - 1].time) - new Date(hist[0].time)) / 60000)
-    : null
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div style={{
-        filter: isDisconnected ? 'blur(3px)' : 'none',
-        opacity: isDisconnected ? 0.35 : 1,
-        pointerEvents: isDisconnected ? 'none' : 'auto',
-        userSelect: isDisconnected ? 'none' : 'auto',
-        transition: 'filter 0.2s, opacity 0.2s',
-      }}>
-        {/* Main metric charts */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          <MetricChart label="CPU"    unit="%"   dataKey="cpu"  history={hist} color="var(--lime)"  height={100} heartbeatInterval={heartbeatInterval} />
-          <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-          <MetricChart label="Memory" unit=" MB" dataKey="mem"  history={hist} color="var(--blue)"  height={100} heartbeatInterval={heartbeatInterval} />
-          <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-          <MetricChart label="Heap"   unit=" MB" dataKey="heap" history={hist} color="var(--peach)" height={100} heartbeatInterval={heartbeatInterval} />
+      <div className="fleet-card-metrics">
+        <div className="fleet-card-metric">
+          <span className="fleet-card-metric-value" style={{ color: 'var(--lime)' }}><Cpu size={10} style={{ marginRight: 3, verticalAlign: -1 }} />{fmt(pm.cpuPercent, '%')}</span>
+          <span className="fleet-card-metric-label">CPU</span>
         </div>
-
-        {/* Secondary charts: workers + active jobs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          <MetricChart label="Workers"     unit="" dataKey="workers"    history={hist} color="var(--purple, #a78bfa)" height={70} heartbeatInterval={heartbeatInterval} />
-          <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-          <MetricChart label="Active Jobs" unit="" dataKey="activeJobs" history={hist} color="var(--teal, #2dd4bf)"  height={70} heartbeatInterval={heartbeatInterval} />
-          <div style={{ flex: 1 }} />
+        <div className="fleet-card-metric">
+          <span className="fleet-card-metric-value" style={{ color: 'var(--blue)' }}><MemoryStick size={10} style={{ marginRight: 3, verticalAlign: -1 }} />{fmt(pm.memUsedMb, 'MB')}</span>
+          <span className="fleet-card-metric-label">Memory</span>
         </div>
-
-        {/* Footer */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 16,
-          padding: '8px 16px',
-          fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)',
-        }}>
-          {pm.recordedAt && (
-            <span>updated {formatRelative(pm.recordedAt)}</span>
-          )}
-          {hist.length > 0 && (
-            <span>{hist.length} samples{approxWindowMins !== null ? ` · ~${approxWindowMins}m window` : ''}</span>
-          )}
-          <span style={{ marginLeft: 'auto' }}>
-            registered {formatDate(runner.createdAt)}
-          </span>
+        <div className="fleet-card-metric">
+          <span className="fleet-card-metric-value" style={{ color: 'var(--teal)' }}><Activity size={10} style={{ marginRight: 3, verticalAlign: -1 }} />{fmt(pm.activeJobs)}</span>
+          <span className="fleet-card-metric-label">Active Jobs</span>
         </div>
       </div>
 
-      {/* Disconnected overlay */}
-      {isDisconnected && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 6,
-        }}>
-          <WifiOff size={18} style={{ color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'monospace' }}>
-            No Data
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Runner is {label.toLowerCase()}
-          </span>
-        </div>
-      )}
-
-      {/* Active but no metrics yet */}
-      {!isDisconnected && !hasMetrics && (
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-            Waiting for first heartbeat with metrics…
-          </span>
-        </div>
-      )}
+      <div className="fleet-card-foot">
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={10} />{formatRelative(runner.lastSeen)}</span>
+        <span className="truncate" style={{ maxWidth: 120 }}>{runner.keyId}</span>
+      </div>
     </div>
   )
 }
@@ -418,6 +123,7 @@ function RunnerMetrics({ runner, history, threshold, heartbeatInterval, isCreden
 export default function Runners() {
   const { user, heartbeatInterval } = useAuth()
   const toast = useToast()
+  const navigate = useNavigate()
   const isAdmin = user?.role === 'admin'
   const threshold = heartbeatInterval * 3
 
@@ -425,8 +131,6 @@ export default function Runners() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [selectedId, setSelectedId] = useState(null)
-  const [metricsHistory, setMetricsHistory] = useState({})
   const [showRegister, setShowRegister] = useState(false)
   const [newRunner, setNewRunner] = useState(null)
   const [form, setForm] = useState({ name: '' })
@@ -435,70 +139,18 @@ export default function Runners() {
   const [renameForm, setRenameForm] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
 
-  const limit = 20
-
-  const mergeHistory = useCallback((id, incoming) => {
-    setMetricsHistory(prev => {
-      const existing = prev[id] || []
-      if (!incoming.length) return prev
-      const byTime = new Map()
-      ;[...existing, ...incoming].forEach(p => byTime.set(p.time, p))
-      const merged = [...byTime.values()]
-        .sort((a, b) => new Date(a.time) - new Date(b.time))
-        .slice(-MAX_HISTORY)
-      if (merged.length === existing.length && merged[merged.length - 1]?.time === existing[existing.length - 1]?.time) return prev
-      return { ...prev, [id]: merged }
-    })
-  }, [])
-
-  const updateHistoryFromPoll = useCallback((list) => {
-    setMetricsHistory(prev => {
-      const next = { ...prev }
-      let changed = false
-      list.forEach(r => {
-        const pm = r.performanceMetrics
-        if (!pm?.recordedAt) return
-        const existing = next[r._id] || []
-        const last = existing[existing.length - 1]
-        if (last?.time === pm.recordedAt) return
-        changed = true
-        next[r._id] = [
-          ...existing.slice(-(MAX_HISTORY - 1)),
-          {
-            time:       pm.recordedAt,
-            cpu:        pm.cpuPercent,
-            mem:        pm.memUsedMb,
-            heap:       pm.heapAllocMb,
-            workers:    pm.workers,
-            activeJobs: pm.activeJobs,
-          },
-        ]
-      })
-      return changed ? next : prev
-    })
-  }, [])
+  const limit = 24
 
   const fetchRunners = useCallback((showSpinner) => {
     if (showSpinner) setLoading(true)
     api.get(`/runners?page=${page}&limit=${limit}`)
       .then(data => {
-        const list = data.data || []
-        setRunners(list)
+        setRunners(data.data || [])
         setTotal(data.total || 0)
-        updateHistoryFromPoll(list)
-        // Pre-fetch Redis history for every visible runner in the background
-        list.forEach(r => {
-          api.get(`/runner/${r._id}/metrics`)
-            .then(res => {
-              const points = res.metrics || []
-              if (points.length) mergeHistory(r._id, points)
-            })
-            .catch(() => {})
-        })
       })
       .catch(err => { if (showSpinner) toast.error(err.message) })
       .finally(() => { if (showSpinner) setLoading(false) })
-  }, [page, updateHistoryFromPoll]) // eslint-disable-line
+  }, [page]) // eslint-disable-line
 
   const load = useCallback(() => fetchRunners(true), [fetchRunners])
   const refresh = useCallback(() => fetchRunners(false), [fetchRunners])
@@ -531,7 +183,7 @@ export default function Runners() {
       await api.put(`/runner/${renameTarget._id}`, { name: renameForm.trim() })
       toast.success(`Runner renamed to "${renameForm.trim()}"`)
       setRenameTarget(null)
-      load(false)
+      load()
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -544,7 +196,7 @@ export default function Runners() {
     try {
       await api.put(`/runner/${runner._id}`, { status: newStatus })
       toast.success(`Runner ${newStatus === 'disabled' ? 'disabled' : 'enabled'}`)
-      load(false)
+      load()
     } catch (err) {
       toast.error(err.message)
     }
@@ -556,7 +208,6 @@ export default function Runners() {
       await api.delete(`/runner/${deleteTarget._id}`)
       toast.success(`Runner "${deleteTarget.name}" deleted`)
       setDeleteTarget(null)
-      if (selectedId === deleteTarget._id) setSelectedId(null)
       load()
     } catch (err) {
       toast.error(err.message)
@@ -565,9 +216,7 @@ export default function Runners() {
     }
   }
 
-  const selectedRunner = runners.find(r => r._id === selectedId) || null
   const pages = Math.ceil(total / limit)
-
   const borrowedRunnerNames = new Set(runners.flatMap(r => r.credentialBorrowers || []))
   const isCredentialFlagged = (runner) => runner.multipleInstances || borrowedRunnerNames.has(runner.name)
   const credentialFlaggedCount = runners.filter(isCredentialFlagged).length
@@ -595,7 +244,7 @@ export default function Runners() {
         ) : (
           <>
             {credentialFlaggedCount > 0 && (
-              <div className="alert alert--warning" style={{ marginBottom: 12 }}>
+              <div className="alert alert--warning" style={{ marginBottom: 14 }}>
                 <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>
                   <strong>API credentials are being shared between multiple runners.</strong>{' '}
@@ -603,81 +252,40 @@ export default function Runners() {
                 </span>
               </div>
             )}
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Last Seen</th>
-                    <th>API Key</th>
-                    <th>Registered</th>
-                    {isAdmin && <th style={{ width: 48 }} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {isAdmin && <AddRow colSpan={6} label="Register Runner" onClick={() => setShowRegister(true)} />}
-                  {runners.map(runner => {
-                    const flagged = isCredentialFlagged(runner)
-                    return (
-                      <tr
-                        key={runner._id}
-                        onClick={() => setSelectedId(runner._id)}
-                        style={{
-                          cursor: 'pointer',
-                          borderLeft: flagged ? '3px solid var(--warning)' : undefined,
-                        }}
-                      >
-                        <td>
-                          <span style={{ fontWeight: 500 }}>{runner.name}</span>
-                        </td>
-                        <td>
-                          {(() => {
-                            const { variant, label } = runnerDisplayStatus(runner, threshold, flagged)
-                            return <Badge variant={variant}>{label}</Badge>
-                          })()}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
-                            <Clock size={12} />
-                            {formatRelative(runner.lastSeen)}
-                          </div>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
-                            <span className="monospace text-muted">{runner.keyId}</span>
-                            <CopyButton value={runner.keyId} />
-                          </div>
-                        </td>
-                        <td style={{ color: 'var(--text-muted)' }}>
-                          {formatDate(runner.createdAt)}
-                        </td>
-                        {isAdmin && (
-                          <td onClick={e => e.stopPropagation()} style={{ textAlign: 'right', padding: '6px 8px' }}>
-                            <ActionsMenu
-                              runner={runner}
-                              onRename={() => { setRenameTarget(runner); setRenameForm(runner.name) }}
-                              onToggle={() => handleToggleRunner(runner)}
-                              onDelete={() => setDeleteTarget(runner)}
-                            />
-                          </td>
-                        )}
-                      </tr>
-                    )
-                  })}
-                  {!isAdmin && runners.length === 0 && (
-                    <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
-                        No runners registered yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {pages > 1 && (
+
+            {runners.length === 0 && !isAdmin ? (
+              <div className="table-wrap">
+                <EmptyState icon={Server} title="No runners registered yet" />
+              </div>
+            ) : (
+              <div className="fleet-grid">
+                {isAdmin && (
+                  <button className="fleet-card fleet-card--ghost" onClick={() => setShowRegister(true)}>
+                    <Plus size={18} />
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>Register Runner</span>
+                  </button>
+                )}
+                {runners.map(runner => (
+                  <FleetCard
+                    key={runner._id}
+                    runner={runner}
+                    threshold={threshold}
+                    flagged={isCredentialFlagged(runner)}
+                    isAdmin={isAdmin}
+                    onOpen={() => navigate(`/runners/${runner._id}`)}
+                    onRename={() => { setRenameTarget(runner); setRenameForm(runner.name) }}
+                    onToggle={() => handleToggleRunner(runner)}
+                    onDelete={() => setDeleteTarget(runner)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {pages > 1 && (
+              <div className="table-wrap" style={{ marginTop: 12, boxShadow: 'none', background: 'none', border: 'none' }}>
                 <Pagination page={page} totalPages={pages} onPageChange={setPage} />
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -783,39 +391,6 @@ export default function Runners() {
           </div>
         </Modal>
       )}
-
-      {/* Runner metrics modal */}
-      {selectedRunner && (() => {
-        const flagged = isCredentialFlagged(selectedRunner)
-        const { variant, label } = runnerDisplayStatus(selectedRunner, threshold, flagged)
-        return (
-          <Modal
-            title={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>{selectedRunner.name}</span>
-                <Badge variant={variant}>{label}</Badge>
-                {flagged && (
-                  <Badge variant="warning">Shared Credentials</Badge>
-                )}
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Clock size={10} />
-                  {formatRelative(selectedRunner.lastSeen)}
-                </span>
-              </div>
-            }
-            onClose={() => setSelectedId(null)}
-            xl
-          >
-            <RunnerMetrics
-              runner={selectedRunner}
-              history={metricsHistory[selectedRunner._id]}
-              threshold={threshold}
-              heartbeatInterval={heartbeatInterval}
-              isCredentialFlagged={flagged}
-            />
-          </Modal>
-        )
-      })()}
     </>
   )
 }

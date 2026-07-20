@@ -54,10 +54,10 @@ export default function Login() {
           <div className="login-logo-icon">
             <img src="/api/v1/branding/image" alt="" />
           </div>
-          <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.03em' }}>TestFleet</span>
+          <span className="monospace" style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>TestFleet</span>
         </div>
 
-        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 8 }}>
+        <h1 className="login-title" style={{ marginBottom: 2 }}>
           Welcome back
         </h1>
         <p className="login-subtitle">
