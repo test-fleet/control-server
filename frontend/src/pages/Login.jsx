@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
+import StatusPulse from '../components/StatusPulse'
 
 export default function Login() {
   const { user, login } = useAuth()
@@ -49,10 +50,12 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <div className="login-card">
+      <div className="login-card hud-corners">
+        <div className="login-eyebrow">Control Plane // Authentication</div>
+
         <div className="login-logo">
           <div className="login-logo-icon">
-            <img src="/api/v1/branding/image" alt="" />
+            <img src="/api/v1/branding/image" alt="" onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/favicon.svg' }} />
           </div>
           <span className="monospace" style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>TestFleet</span>
         </div>
@@ -73,6 +76,11 @@ export default function Login() {
         <p className="login-note">
           Access is invite-only. Contact your administrator if you don't have an account.
         </p>
+
+        <div className="login-status">
+          <StatusPulse color="var(--lime)" size={6} />
+          <span>All systems operational</span>
+        </div>
       </div>
     </div>
   )

@@ -103,7 +103,7 @@ function ShellInner() {
     <div className="app-shell">
       <aside className={`rail${expanded ? ' expanded' : ''}`}>
         <NavLink to="/dashboard" className="rail-logo">
-          <div className="rail-logo-icon"><img src="/api/v1/branding/image" alt="" /></div>
+          <div className="rail-logo-icon"><img src="/api/v1/branding/image" alt="" onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/favicon.svg' }} /></div>
           <span className="rail-logo-name">TestFleet</span>
         </NavLink>
 

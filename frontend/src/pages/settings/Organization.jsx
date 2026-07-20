@@ -59,7 +59,7 @@ export default function Organization() {
             <label className="form-label">Org logo / favicon</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', background: 'var(--surface-raised)', border: '1px solid var(--border)', flexShrink: 0 }}>
-                <img src={preview || '/api/v1/branding/image'} alt="Current logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={preview || '/api/v1/branding/image'} alt="Current logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/favicon.svg' }} />
               </div>
               <div>
                 <input ref={fileInputRef} type="file" accept={ACCEPTED_TYPES} onChange={handleSelect} style={{ display: 'none' }} id="branding-upload-input" />

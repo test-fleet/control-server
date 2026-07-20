@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
 import { ThemeProvider } from './context/ThemeContext'
+import SystemGate from './components/SystemGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import AppShell from './components/AppShell'
@@ -31,6 +32,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
+      <SystemGate>
       <AuthProvider>
         <ToastProvider>
           <Routes>
@@ -67,6 +69,7 @@ export default function App() {
           </Routes>
         </ToastProvider>
       </AuthProvider>
+      </SystemGate>
       </ThemeProvider>
     </BrowserRouter>
   )

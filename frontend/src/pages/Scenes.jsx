@@ -11,6 +11,8 @@ import StatusPulse from '../components/StatusPulse'
 import Badge from '../components/Badge'
 import Select from '../components/Select'
 import { RunDotTrail } from '../components/Sparkline'
+import { InfoField, InfoDivider } from '../components/InfoRow'
+import { useGhostTileHeight } from '../hooks/useGhostTileHeight'
 import { FREQUENCY_OPTIONS, THRESHOLD_OPTIONS, buildCronSchedule, frequencyLabel } from '../lib/sceneHelpers'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50]
@@ -106,19 +108,6 @@ function CreateForm({ onSubmit, onClose, submitting }) {
 }
 
 // ── Scene card ───────────────────────────────────────────────────────────
-
-function InfoField({ label, children }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-      <span style={{ color: 'var(--text-muted)' }}>{label}:</span>
-      <span style={{ color: 'var(--text-dim)' }}>{children}</span>
-    </span>
-  )
-}
-
-function InfoDivider() {
-  return <span style={{ color: 'var(--border)' }}>│</span>
-}
 
 function SceneCard({ scene, history, onOpen, onRunNow, onToggle, onDelete }) {
   const wontRun = scene.enabled && (scene.frameIds?.length ?? 0) === 0
@@ -225,6 +214,8 @@ export default function Scenes() {
     })
   }, [scenes, query, filter])
 
+  const [listRef, ghostHeight] = useGhostTileHeight([filtered])
+
   async function handleCreate(fields) {
     setSubmitting(true)
     try {
@@ -287,9 +278,6 @@ export default function Scenes() {
           <button className="btn btn--secondary btn--sm" onClick={() => load()}>
             <RefreshCw size={14} />Refresh
           </button>
-          <button className="btn btn--primary btn--sm" onClick={() => setShowCreate(true)}>
-            <Plus size={13} />New Scene
-          </button>
         </div>
       </div>
 
@@ -339,17 +327,22 @@ export default function Scenes() {
               </div>
             </div>
 
-            {filtered.length === 0 ? (
-              <div className="table-wrap">
-                <EmptyState
-                  icon={Clapperboard}
-                  title={scenes.length === 0 ? 'No scenes yet' : 'No scenes match'}
-                  subtitle={scenes.length === 0 ? 'Create one to define the HTTP requests your runners will execute.' : 'Try a different search or filter.'}
-                />
-              </div>
-            ) : (
-              <div className="wide-list">
-                {filtered.map(scene => (
+            <div className="wide-list" ref={listRef}>
+              <button className="fleet-card fleet-card--ghost" style={ghostHeight ? { minHeight: ghostHeight } : undefined} onClick={() => setShowCreate(true)}>
+                <Plus size={16} />
+                <span style={{ fontSize: 12, fontWeight: 600 }}>New Scene</span>
+              </button>
+
+              {filtered.length === 0 ? (
+                <div className="card">
+                  <EmptyState
+                    icon={Clapperboard}
+                    title={scenes.length === 0 ? 'No scenes yet' : 'No scenes match'}
+                    subtitle={scenes.length === 0 ? 'Create one above to define the HTTP requests your runners will execute.' : 'Try a different search or filter.'}
+                  />
+                </div>
+              ) : (
+                filtered.map(scene => (
                   <SceneCard
                     key={scene.id}
                     scene={scene}
@@ -359,9 +352,9 @@ export default function Scenes() {
                     onToggle={() => handleToggle(scene)}
                     onDelete={() => setDeleteTarget(scene)}
                   />
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
 
             {totalPages > 1 && (
               <div className="table-wrap" style={{ marginTop: 12, boxShadow: 'none', background: 'none', border: 'none' }}>

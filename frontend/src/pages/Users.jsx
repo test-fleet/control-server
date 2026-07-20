@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Shield, UserX } from 'lucide-react'
+import { Plus, RefreshCw, Shield, UserX, Users as UsersIcon } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -7,8 +7,10 @@ import Modal from '../components/Modal'
 import Pagination from '../components/Pagination'
 import Badge from '../components/Badge'
 import ActionsMenu from '../components/ActionsMenu'
-import AddRow from '../components/AddRow'
+import EmptyState from '../components/EmptyState'
 import Select from '../components/Select'
+import { InfoField, InfoDivider } from '../components/InfoRow'
+import { useGhostTileHeight } from '../hooks/useGhostTileHeight'
 import { UserAvatar } from '../components/AppShell'
 
 function formatDate(date) {
@@ -18,6 +20,32 @@ function formatDate(date) {
 
 function capitalize(s) {
   return s ? s[0].toUpperCase() + s.slice(1) : ''
+}
+
+function UserCard({ user, isSelf, actionItems }) {
+  return (
+    <div className="fleet-card" style={{ cursor: 'default' }}>
+      <div className="fleet-card-top">
+        <UserAvatar user={user} size={28} />
+        <span className="fleet-card-name">{user.userName || '—'}</span>
+        <Badge variant={user.role}>{capitalize(user.role)}</Badge>
+        <Badge variant={user.status}>{capitalize(user.status)}</Badge>
+        <span style={{ marginLeft: 'auto' }}>
+          {isSelf
+            ? <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>You</span>
+            : <ActionsMenu items={actionItems} />}
+        </span>
+      </div>
+
+      <div className="monospace" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+        <InfoField label="Email">{user.email}</InfoField>
+        <InfoDivider />
+        <InfoField label="Joined">{formatDate(user.invitedAt || user.createdAt)}</InfoField>
+        <InfoDivider />
+        <InfoField label="Last login">{formatDate(user.lastLogin)}</InfoField>
+      </div>
+    </div>
+  )
 }
 
 export default function Users() {
@@ -31,6 +59,7 @@ export default function Users() {
   const [showInvite, setShowInvite] = useState(false)
   const [form, setForm] = useState({ email: '', role: 'user' })
   const [submitting, setSubmitting] = useState(false)
+  const [listRef, ghostHeight] = useGhostTileHeight([users])
 
   const limit = 20
 
@@ -109,60 +138,49 @@ export default function Users() {
             <div className="spinner spinner--lg" />
           </div>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Joined</th>
-                  <th>Last Login</th>
-                  <th style={{ width: 40 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                <AddRow colSpan={6} label="Invite User" onClick={() => setShowInvite(true)} />
-                {users.map(u => {
+          <>
+            <div className="wide-list" ref={listRef}>
+              <button className="fleet-card fleet-card--ghost" style={ghostHeight ? { minHeight: ghostHeight } : undefined} onClick={() => setShowInvite(true)}>
+                <Plus size={16} />
+                <span style={{ fontSize: 12, fontWeight: 600 }}>Invite User</span>
+              </button>
+
+              {users.length === 0 ? (
+                <div className="card">
+                  <EmptyState
+                    icon={UsersIcon}
+                    title="No users yet"
+                    subtitle="Invite one above to give them access to TestFleet."
+                  />
+                </div>
+              ) : (
+                users.map(u => {
                   const isSelf = u._id === currentUser.id
                   return (
-                    <tr key={u._id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <UserAvatar user={u} size={28} />
-                          <div>
-                            <div style={{ fontWeight: 500 }}>{u.userName || '—'}</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td><Badge variant={u.role}>{capitalize(u.role)}</Badge></td>
-                      <td><Badge variant={u.status}>{capitalize(u.status)}</Badge></td>
-                      <td style={{ color: 'var(--text-muted)' }}>{formatDate(u.invitedAt || u.createdAt)}</td>
-                      <td style={{ color: 'var(--text-muted)' }}>{formatDate(u.lastLogin)}</td>
-                      <td>
-                        {isSelf ? (
-                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>You</span>
-                        ) : (
-                          <ActionsMenu items={[
-                            ...(u.role !== 'admin' ? [{ label: 'Make Admin', icon: Shield, onClick: () => changeRole(u, 'admin') }] : []),
-                            ...(u.role !== 'user' ? [{ label: 'Make User', icon: Shield, onClick: () => changeRole(u, 'user') }] : []),
-                            { divider: true },
-                            u.status !== 'disabled'
-                              ? { label: 'Disable User', icon: UserX, danger: true, onClick: () => changeStatus(u, 'disabled') }
-                              : { label: 'Re-enable User', icon: Shield, onClick: () => changeStatus(u, 'active') },
-                          ]} />
-                        )}
-                      </td>
-                    </tr>
+                    <UserCard
+                      key={u._id}
+                      user={u}
+                      isSelf={isSelf}
+                      actionItems={[
+                        ...(u.role !== 'admin' ? [{ label: 'Make Admin', icon: Shield, onClick: () => changeRole(u, 'admin') }] : []),
+                        ...(u.role !== 'user' ? [{ label: 'Make User', icon: Shield, onClick: () => changeRole(u, 'user') }] : []),
+                        { divider: true },
+                        u.status !== 'disabled'
+                          ? { label: 'Disable User', icon: UserX, danger: true, onClick: () => changeStatus(u, 'disabled') }
+                          : { label: 'Re-enable User', icon: Shield, onClick: () => changeStatus(u, 'active') },
+                      ]}
+                    />
                   )
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </div>
+
             {pages > 1 && (
-              <Pagination page={page} totalPages={pages} onPageChange={setPage} />
+              <div className="table-wrap" style={{ marginTop: 12, boxShadow: 'none', background: 'none', border: 'none' }}>
+                <Pagination page={page} totalPages={pages} onPageChange={setPage} />
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
