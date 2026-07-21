@@ -1,11 +1,11 @@
 const { ROLES } = require('../utils/constants')
-const { UnauthorizedError, ValidationError } = require('../utils/appError')
+const { ForbiddenError, ValidationError } = require('../utils/appError')
 const runnerService = require('../services/runner.service')
 
 async function createRunner(req, res, next) {
   const userRole = req.user.role
   if (userRole !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to create runners'))
+    return next(new ForbiddenError('You must be an admin to create runners'))
   }
 
   const userId = req.user.id
@@ -77,7 +77,7 @@ async function runnerMetrics(req, res, next) {
 
 async function updateRunner(req, res, next) {
   if (req.user.role !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to update runners'))
+    return next(new ForbiddenError('You must be an admin to update runners'))
   }
 
   const { id } = req.params
@@ -107,7 +107,7 @@ async function updateRunner(req, res, next) {
 
 async function deleteRunner(req, res, next) {
   if (req.user.role !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to delete runners'))
+    return next(new ForbiddenError('You must be an admin to delete runners'))
   }
 
   const { id } = req.params

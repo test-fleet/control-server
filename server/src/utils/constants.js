@@ -15,8 +15,14 @@ const STATUS = {
 // Must match the hardcoded value in the test-runner's internal/config/config.go.
 const REDIS_CHANNEL = 'testfleet:jobs'
 
+// Sentinel runnerId used for the synthetic SceneResult written when a run's
+// deadline passes with zero real reports — distinguishes "no runner ever
+// reported" from an actual runner's keyId.
+const INCOMPLETE_RUNNER_ID = 'timeout'
+
 module.exports = {
   ROLES,
   STATUS,
-  REDIS_CHANNEL
+  REDIS_CHANNEL,
+  INCOMPLETE_RUNNER_ID
 }

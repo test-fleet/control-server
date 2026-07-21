@@ -5,15 +5,9 @@ import { api } from '../../api/client'
 import Pagination from '../../components/Pagination'
 import EmptyState from '../../components/EmptyState'
 import StatusPulse from '../../components/StatusPulse'
+import { statusColor } from '../../lib/statusColor'
 
 const PAGE_LIMIT = 20
-
-function statusColor(s) {
-  if (s === 'passed') return 'var(--success)'
-  if (s === 'pending') return 'var(--blue)'
-  if (s === 'error') return 'var(--peach)'
-  return 'var(--error)'
-}
 
 function formatTimestamp(dateStr) {
   if (!dateStr) return '—'

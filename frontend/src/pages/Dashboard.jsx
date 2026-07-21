@@ -12,6 +12,7 @@ import Badge from '../components/Badge'
 import StatTile from '../components/StatTile'
 import StatusPulse from '../components/StatusPulse'
 import { RunDotTrail } from '../components/Sparkline'
+import { statusColor } from '../lib/statusColor'
 
 function timeAgo(date) {
   if (!date) return null
@@ -21,13 +22,6 @@ function timeAgo(date) {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-function statusColor(s) {
-  if (s === 'passed') return 'var(--success)'
-  if (s === 'error') return 'var(--peach)'
-  if (s === 'failed') return 'var(--error)'
-  return 'var(--border-bright)'
 }
 
 function runnerDisplayStatus(runner, threshold, isCredentialFlagged = false) {

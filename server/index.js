@@ -14,6 +14,7 @@ const { bootstrapSampleScene } = require('./src/utils/bootstrapSampleScene')
 const { connectDatabase, disconnectDatabase } = require("./config/db");
 const { connectRedis, disconnectRedis, getPublisher } = require("./config/redis");
 const scheduler = require("./src/utils/scheduler");
+const dispatchSweeper = require("./src/utils/dispatchSweeper");
 const errorHandler = require("./src/middleware/errors");
 
 const { authenticateJWT } = require('./src/middleware/auth')
@@ -39,6 +40,7 @@ async function startServer() {
     }
 
     await scheduler.reload()
+    dispatchSweeper.start()
 
     const app = express();
     app.use(express.json({
@@ -122,6 +124,7 @@ async function startServer() {
 
 process.on("SIGINT", async () => {
   console.log("shutting down gracefully...");
+  dispatchSweeper.stop();
   await disconnectDatabase();
   await disconnectRedis();
   process.exit(0);

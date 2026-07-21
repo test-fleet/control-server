@@ -1,4 +1,4 @@
-const { ConflictError, ValidationError, UnauthorizedError, AppError } = require('../utils/appError')
+const { ConflictError, ValidationError, ForbiddenError, AppError } = require('../utils/appError')
 const userService = require('../services/user.service');
 
 const { ROLES, STATUS } = require('../utils/constants')
@@ -8,7 +8,7 @@ const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 async function inviteUser(req, res, next) {
   const userRole = req.user.role
   if (userRole !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to invite users'))
+    return next(new ForbiddenError('You must be an admin to invite users'))
   }
 
   const email = req.body.email.toLowerCase()
@@ -32,7 +32,7 @@ async function inviteUser(req, res, next) {
   const emailDomain = email.split('@')[1]?.toLowerCase()
 
   if (!allowedDomains.includes(emailDomain)) {
-    return next(new UnauthorizedError('The email domain provided is not allowed'))
+    return next(new ForbiddenError('The email domain provided is not allowed'))
   }
 
   try {
@@ -64,7 +64,7 @@ async function listUsers(req, res, next) {
 async function editRole(req, res, next) {
   const userRole = req.user.role
   if (userRole !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to edit users'))
+    return next(new ForbiddenError('You must be an admin to edit users'))
   }
 
   const userId = req.params.id
@@ -73,7 +73,7 @@ async function editRole(req, res, next) {
   }
 
   if (userId === req.user._id.toString()) {
-    return next(new UnauthorizedError('You cannot change your own role'))
+    return next(new ForbiddenError('You cannot change your own role'))
   }
 
   const updatedRole = req.body.role
@@ -100,7 +100,7 @@ async function editRole(req, res, next) {
 async function editStatus(req, res, next) {
   const userRole = req.user.role
   if (userRole !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to edit users'))
+    return next(new ForbiddenError('You must be an admin to edit users'))
   }
 
   const userId = req.params.id
@@ -109,7 +109,7 @@ async function editStatus(req, res, next) {
   }
 
   if (userId === req.user._id.toString()) {
-    return next(new UnauthorizedError('You cannot change your own status'))
+    return next(new ForbiddenError('You cannot change your own status'))
   }
 
   const updatedStatus = req.body.status.toLowerCase()
@@ -137,7 +137,7 @@ async function editStatus(req, res, next) {
 
 async function deleteUser(req, res, next) {
   if (req.user.role !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to delete users'))
+    return next(new ForbiddenError('You must be an admin to delete users'))
   }
 
   const userId = req.params.id
@@ -146,7 +146,7 @@ async function deleteUser(req, res, next) {
   }
 
   if (userId === req.user._id.toString()) {
-    return next(new UnauthorizedError('You cannot delete your own account'))
+    return next(new ForbiddenError('You cannot delete your own account'))
   }
 
   try {

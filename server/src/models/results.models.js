@@ -47,7 +47,7 @@ const SceneResultSchema = new mongoose.Schema({
   startedAt:   { type: Date, required: true },
   completedAt: { type: Date, required: true },
   durationMs:  { type: Number, required: true },
-  status:      { type: String, enum: ['passed', 'failed', 'error'], required: true },
+  status:      { type: String, enum: ['passed', 'failed', 'error', 'incomplete'], required: true },
   frames:      { type: [FrameResultSchema], default: [] },
   // null = pinned (keep forever); set to a future Date to allow TTL deletion
   expiresAt:   { type: Date, default: () => new Date(Date.now() + WEEK_MS) },

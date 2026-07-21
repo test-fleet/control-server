@@ -2,7 +2,8 @@ const Runner = require('../models/runner.model')
 const Scene = require('../models/scene.model')
 const User = require('../models/user.model')
 const { SceneResult } = require('../models/results.models')
-const { listRecentDispatches } = require('../utils/dispatchTracker')
+const runDispatchService = require('./runDispatch.service')
+const { INCOMPLETE_RUNNER_ID } = require('../utils/constants')
 
 const QUEUE_RECENT_WINDOW_MS = 30 * 1000
 
@@ -29,13 +30,20 @@ const SEVERITY_RANK = { error: 0, warning: 1 }
 // had a chance to report back), so "queued"/"running" is knowable immediately
 // — SceneResult docs alone can't show that, since none exist yet at t=0.
 async function getQueueActivity() {
-  const dispatches = listRecentDispatches()
+  const dispatches = await runDispatchService.listRecentDispatches()
   if (dispatches.length === 0) return []
 
   const runIds = dispatches.map(d => d.runId)
   const reportRows = await SceneResult.aggregate([
     { $match: { runId: { $in: runIds } } },
-    { $group: { _id: '$runId', reported: { $sum: 1 }, completedAt: { $max: '$completedAt' } } },
+    {
+      $group: {
+        _id: '$runId',
+        // Excludes the synthetic timeout-sentinel doc — see results.service.js
+        reported: { $sum: { $cond: [{ $eq: ['$runnerId', INCOMPLETE_RUNNER_ID] }, 0, 1] } },
+        completedAt: { $max: '$completedAt' },
+      }
+    },
   ])
   const reportMap = new Map(reportRows.map(r => [r._id, r]))
 
@@ -44,7 +52,10 @@ async function getQueueActivity() {
     .map(d => {
       const report = reportMap.get(d.runId)
       const reported = report?.reported || 0
-      const status = reported === 0 ? 'queued' : reported < d.expectedRunners ? 'running' : 'completed'
+      const pastDeadline = now > new Date(d.deadline).getTime()
+      const status = reported >= d.expectedRunners
+        ? 'completed'
+        : pastDeadline ? 'incomplete' : (reported === 0 ? 'queued' : 'running')
       return {
         runId: d.runId,
         sceneId: d.sceneId,
@@ -53,10 +64,21 @@ async function getQueueActivity() {
         reportedRunners: reported,
         status,
         dispatchedAt: d.dispatchedAt,
+        deadline: d.deadline,
         completedAt: report?.completedAt ?? null,
       }
     })
-    .filter(e => e.status !== 'completed' || now - new Date(e.dispatchedAt).getTime() <= QUEUE_RECENT_WINDOW_MS)
+    // queued/running stay visible indefinitely (still in-flight); completed and
+    // incomplete are terminal and only stick around briefly so "just happened"
+    // activity is visible without lingering forever. Anchored to when each
+    // actually resolved (completedAt / deadline), not dispatchedAt — a scene
+    // with a multi-minute timeout would otherwise fall outside the window the
+    // instant it's marked incomplete, since dispatchedAt is long past by then.
+    .filter(e => {
+      if (e.status === 'completed') return now - new Date(e.completedAt ?? e.dispatchedAt).getTime() <= QUEUE_RECENT_WINDOW_MS
+      if (e.status === 'incomplete') return now - new Date(e.deadline).getTime() <= QUEUE_RECENT_WINDOW_MS
+      return true
+    })
     .slice(0, 8)
 }
 
@@ -110,6 +132,7 @@ async function getDashboardSummary() {
 
   let passingScenes = 0
   let failingScenes = 0
+  let incompleteScenes = 0
   let enabledScenes = 0
 
   for (const scene of scenes) {
@@ -125,12 +148,22 @@ async function getDashboardSummary() {
         path: `/scenes/${scene.id}`,
       })
     }
+    if (scene.lastRunStatus === 'incomplete') {
+      incompleteScenes++
+      alerts.push({
+        type: 'scene_incomplete',
+        severity: 'warning',
+        title: `"${scene.name}" isn't getting runner coverage`,
+        sub: scene.lastRunAt ? `Last run timed out waiting for reports · ${new Date(scene.lastRunAt).toISOString()}` : 'Last run timed out waiting for reports',
+        path: `/scenes/${scene.id}`,
+      })
+    }
   }
 
   alerts.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
 
   return {
-    scenes: { total: scenes.length, enabled: enabledScenes, passing: passingScenes, failing: failingScenes },
+    scenes: { total: scenes.length, enabled: enabledScenes, passing: passingScenes, failing: failingScenes, incomplete: incompleteScenes },
     runners: { total: runners.length, active: activeRunners, offline: offlineRunners, flagged: flaggedRunners },
     users: { total: userCount },
     alerts,

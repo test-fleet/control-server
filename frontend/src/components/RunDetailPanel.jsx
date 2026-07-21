@@ -2,13 +2,9 @@ import { useState } from 'react'
 import { FrameDetail } from './FrameDetail'
 import Waterfall from './Waterfall'
 import StatusPulse from './StatusPulse'
+import { statusColor } from '../lib/statusColor'
 
-export function statusColor(s) {
-  if (s === 'passed') return 'var(--success)'
-  if (s === 'pending') return 'var(--blue)'
-  if (s === 'error') return 'var(--peach)'
-  return 'var(--error)'
-}
+export { statusColor }
 
 // A frame is "not executed" if the scene defines it (and it was enabled at
 // run time) but this runner's result has no entry for it — fail-fast means

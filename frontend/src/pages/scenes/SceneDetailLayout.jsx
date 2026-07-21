@@ -4,6 +4,7 @@ import { ArrowLeft, Play, AlertTriangle } from 'lucide-react'
 import { api } from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { frequencyLabel } from '../../lib/sceneHelpers'
+import { statusColor } from '../../lib/statusColor'
 
 function formatTimestamp(dateStr) {
   if (!dateStr) return '—'
@@ -13,12 +14,6 @@ function formatTimestamp(dateStr) {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   return `${Math.floor(diff / 86_400_000)}d ago`
-}
-
-function statusColor(s) {
-  if (s === 'passed') return 'var(--success)'
-  if (s === 'error') return 'var(--peach)'
-  return 'var(--error)'
 }
 
 export default function SceneDetailLayout() {

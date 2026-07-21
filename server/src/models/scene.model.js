@@ -61,7 +61,7 @@ const SceneSchema = new mongoose.Schema({
     required: true
   },
   passThreshold: { type: Number, default: 1.0, min: 0, max: 1 },
-  lastRunStatus: { type: String, enum: ['passed', 'failed', 'error', null], default: null },
+  lastRunStatus: { type: String, enum: ['passed', 'failed', 'error', 'incomplete', null], default: null },
   lastRunAt:     { type: Date, default: null },
   lastRunId:     { type: String, default: null },
   lastPassAt:    { type: Date, default: null },

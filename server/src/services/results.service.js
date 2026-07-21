@@ -2,7 +2,8 @@ const { SceneResult, WEEK_MS } = require('../models/results.models')
 const Scene = require('../models/scene.model')
 const Runner = require('../models/runner.model')
 const { AppError, ValidationError } = require('../utils/appError')
-const { getJobExpectedRunners } = require('../utils/jobCache')
+const runDispatchService = require('./runDispatch.service')
+const { INCOMPLETE_RUNNER_ID } = require('../utils/constants')
 
 async function pinLatest(docId, sceneId, statusCategory) {
   const oldPinned = await SceneResult.findOne({
@@ -43,9 +44,9 @@ async function saveSceneResult(payload) {
       : f.request,
   }))
 
-  // Prefer the server-side dispatch cache over whatever the runner sent (or the default).
+  // Prefer the server-side dispatch record over whatever the runner sent (or the default).
   // Runners are not required to echo expectedRunners back; the scheduler stamps it.
-  const resolvedExpectedRunners = getJobExpectedRunners(runId) ?? expectedRunners ?? 1
+  const resolvedExpectedRunners = (await runDispatchService.getExpectedRunners(runId)) ?? expectedRunners ?? 1
 
   let result
   try {
@@ -80,6 +81,32 @@ async function saveSceneResult(payload) {
   return result
 }
 
+// Called by dispatchSweeper when a dispatch's deadline passes with zero real
+// reports — writes a terminal placeholder directly (bypassing saveSceneResult's
+// runner-facing validation, since 'incomplete' is never runner-submitted) so
+// the run shows up in Results/Dashboard instead of vanishing.
+async function recordIncompleteRun({ runId, sceneId, sceneName, expectedRunners, dispatchedAt, deadline }) {
+  const doc = await SceneResult.create({
+    runId,
+    jobId: runId,
+    sceneId,
+    runnerId: INCOMPLETE_RUNNER_ID,
+    expectedRunners,
+    startedAt: dispatchedAt,
+    completedAt: deadline,
+    durationMs: deadline.getTime() - dispatchedAt.getTime(),
+    status: 'incomplete',
+    frames: [],
+  })
+
+  await Scene.findOneAndUpdate(
+    { id: sceneId },
+    { $set: { lastRunStatus: 'incomplete', lastRunAt: deadline, lastRunId: runId } }
+  ).catch(err => console.error('[results] failed to update scene last run for incomplete run:', err))
+
+  return doc
+}
+
 // Shared aggregation pipeline stages for grouping results by runId
 function _buildRunPipeline(preMatch, statusFilter) {
   const pipeline = [
@@ -91,8 +118,15 @@ function _buildRunPipeline(preMatch, statusFilter) {
         startedAt:        { $min: '$startedAt' },
         completedAt:      { $max: '$completedAt' },
         expectedRunners:  { $max: '$expectedRunners' },
-        reportedRunners:  { $sum: 1 },
+        // Excludes the synthetic timeout-sentinel doc — it's a placeholder
+        // marking "no runner reported", not an actual runner's result.
+        reportedRunners:  { $sum: { $cond: [{ $eq: ['$runnerId', INCOMPLETE_RUNNER_ID] }, 0, 1] } },
         passedRunners:    { $sum: { $cond: [{ $eq: ['$status', 'passed'] }, 1, 0] } },
+        // Once true, forces status to 'incomplete' regardless of later report
+        // counts — otherwise a late real report arriving after the sweep
+        // already finalized the run as incomplete could flip it back to
+        // passed/failed by diluting reportedRunners back up.
+        hasTimeoutSentinel: { $max: { $cond: [{ $eq: ['$runnerId', INCOMPLETE_RUNNER_ID] }, 1, 0] } },
       }
     },
     {
@@ -133,20 +167,30 @@ function _buildRunPipeline(preMatch, statusFilter) {
             then: 'pending',
             else: {
               $cond: {
-                if: {
+                if: { $or: [{ $eq: ['$hasTimeoutSentinel', 1] }, { $lt: ['$reportedRunners', '$expectedRunners'] }] },
+                // Deadline passed and not every expected runner reported —
+                // either the sweep already marked it (sentinel present), or
+                // this is the "some but not all reported" case, which reads
+                // this way live with no sweep involvement needed.
+                then: 'incomplete',
+                else: {
                   $cond: {
-                    if: { $eq: ['$passThreshold', 0] },
-                    then: { $gte: ['$passedRunners', 1] },
-                    else: {
-                      $gte: [
-                        { $cond: [{ $eq: ['$expectedRunners', 0] }, 0, { $divide: ['$passedRunners', '$expectedRunners'] }] },
-                        '$passThreshold'
-                      ]
-                    }
+                    if: {
+                      $cond: {
+                        if: { $eq: ['$passThreshold', 0] },
+                        then: { $gte: ['$passedRunners', 1] },
+                        else: {
+                          $gte: [
+                            { $cond: [{ $eq: ['$expectedRunners', 0] }, 0, { $divide: ['$passedRunners', '$expectedRunners'] }] },
+                            '$passThreshold'
+                          ]
+                        }
+                      }
+                    },
+                    then: 'passed',
+                    else: 'failed'
                   }
-                },
-                then: 'passed',
-                else: 'failed'
+                }
               }
             }
           }
@@ -154,7 +198,7 @@ function _buildRunPipeline(preMatch, statusFilter) {
       }
     },
     {
-      $project: { scene: 0, sceneTimeout: 0, _isPending: 0, _id: 0 }
+      $project: { scene: 0, sceneTimeout: 0, _isPending: 0, hasTimeoutSentinel: 0, _id: 0 }
     },
     { $sort: { completedAt: -1 } },
   ]
@@ -235,12 +279,16 @@ async function getResultByRunId(runId) {
     const sceneId = results[0].sceneId
     const scene = await Scene.findOne({ id: sceneId }).select('name passThreshold timeout').exec()
 
+    const hasTimeoutSentinel = results.some(r => r.runnerId === INCOMPLETE_RUNNER_ID)
+    // Excludes the synthetic timeout-sentinel doc — see _buildRunPipeline for why.
+    const realResults = results.filter(r => r.runnerId !== INCOMPLETE_RUNNER_ID)
+
     const storedExpected = Math.max(...results.map(r => r.expectedRunners ?? 1))
-    const expectedRunners = Math.max(storedExpected, results.length)
+    const expectedRunners = Math.max(storedExpected, realResults.length)
     const passThreshold = scene?.passThreshold ?? 1.0
     const sceneTimeout = scene?.timeout ?? 30000
-    const reportedRunners = results.length
-    const passedRunners = results.filter(r => r.status === 'passed').length
+    const reportedRunners = realResults.length
+    const passedRunners = realResults.filter(r => r.status === 'passed').length
 
     const isPending = reportedRunners < expectedRunners &&
       Date.now() < new Date(results[0].startedAt).getTime() + sceneTimeout
@@ -248,6 +296,8 @@ async function getResultByRunId(runId) {
     let status
     if (isPending) {
       status = 'pending'
+    } else if (hasTimeoutSentinel || reportedRunners < expectedRunners) {
+      status = 'incomplete'
     } else {
       const meets = passThreshold === 0
         ? passedRunners >= 1
@@ -255,7 +305,7 @@ async function getResultByRunId(runId) {
       status = meets ? 'passed' : 'failed'
     }
 
-    const runnerKeyIds = [...new Set(results.map(r => r.runnerId))]
+    const runnerKeyIds = [...new Set(realResults.map(r => r.runnerId))]
     const runnerDocs = await Runner.find({ keyId: { $in: runnerKeyIds } }).select('keyId name').exec()
     const runnerNameMap = Object.fromEntries(runnerDocs.map(r => [r.keyId, r.name]))
 
@@ -274,7 +324,7 @@ async function getResultByRunId(runId) {
       durationMs: new Date(results[results.length - 1].completedAt) - new Date(results[0].startedAt),
       runners: results.map(r => ({
         runnerId: r.runnerId,
-        runnerName: runnerNameMap[r.runnerId] ?? r.runnerId,
+        runnerName: r.runnerId === INCOMPLETE_RUNNER_ID ? 'No runner reported' : (runnerNameMap[r.runnerId] ?? r.runnerId),
         status: r.status,
         durationMs: r.durationMs,
         startedAt: r.startedAt,
@@ -322,6 +372,7 @@ async function getRecentResults(limit, status, sceneId, page) {
 
 module.exports = {
   saveSceneResult,
+  recordIncompleteRun,
   getSceneResultsSummary,
   getAggregatedRuns,
   getRecentResults,

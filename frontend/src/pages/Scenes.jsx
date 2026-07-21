@@ -14,12 +14,14 @@ import { RunDotTrail } from '../components/Sparkline'
 import { InfoField, InfoDivider } from '../components/InfoRow'
 import { useGhostTileHeight } from '../hooks/useGhostTileHeight'
 import { FREQUENCY_OPTIONS, THRESHOLD_OPTIONS, buildCronSchedule, frequencyLabel } from '../lib/sceneHelpers'
+import { statusColor } from '../lib/statusColor'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50]
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'passing', label: 'Passing' },
   { key: 'failing', label: 'Failing' },
+  { key: 'incomplete', label: 'Incomplete' },
   { key: 'disabled', label: 'Disabled' },
 ]
 
@@ -31,13 +33,6 @@ function formatTimestamp(dateStr) {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   return `${Math.floor(diff / 86_400_000)}d ago`
-}
-
-function statusColor(s) {
-  if (s === 'passed') return 'var(--success)'
-  if (s === 'error') return 'var(--peach)'
-  if (s) return 'var(--error)'
-  return 'var(--text-muted)'
 }
 
 // ── Create modal ──────────────────────────────────────────────────────────
@@ -209,6 +204,7 @@ export default function Scenes() {
       if (q && !s.name.toLowerCase().includes(q) && !s.description?.toLowerCase().includes(q)) return false
       if (filter === 'passing') return s.lastRunStatus === 'passed'
       if (filter === 'failing') return s.lastRunStatus === 'failed' || s.lastRunStatus === 'error'
+      if (filter === 'incomplete') return s.lastRunStatus === 'incomplete'
       if (filter === 'disabled') return !s.enabled
       return true
     })

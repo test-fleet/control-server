@@ -3,7 +3,7 @@ const fs = require('fs')
 
 const brandingService = require('../services/branding.service')
 const { ROLES } = require('../utils/constants')
-const { ValidationError, UnauthorizedError } = require('../utils/appError')
+const { ValidationError, ForbiddenError } = require('../utils/appError')
 
 const DEFAULT_FAVICON_PATH = path.resolve(process.cwd(), 'frontend', 'dist', 'favicon.svg')
 
@@ -28,7 +28,7 @@ async function getBrandingImage(req, res, next) {
 
 async function uploadBranding(req, res, next) {
   if (req.user.role !== ROLES.ADMIN) {
-    return next(new UnauthorizedError('You must be an admin to update branding'))
+    return next(new ForbiddenError('You must be an admin to update branding'))
   }
 
   if (!req.file) {
