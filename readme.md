@@ -4,7 +4,7 @@
 
 ## What is TestFleet?
 
-TestFleet is an open source API testing & monitoring tool. It runs scheduled, multi-step HTTP checks against your APIs. Users have the option to generate assertions on each request to validate responses against expected values. TestFleet also has the ability to extract variables from responses, allowing them to be referenced in future steps of the test. 
+TestFleet is an open source API testing & monitoring tool. It runs scheduled, multi-step HTTP checks against your APIs through a distributed fleet of runners, so the same checks execute from wherever you've deployed them. Each step can define its own assertions, to validate the response against expected values, and extractions, to pull values into variables that later steps can reference. TestFleet is designed to be self-hosted and configured to meet your specific testing needs.
 
 ## Scenes & Frames
 API tests are referred to as **scenes**, and each step within a scene, is a **frame**. 
