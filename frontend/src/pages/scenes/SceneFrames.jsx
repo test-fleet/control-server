@@ -8,7 +8,7 @@ import Select from '../../components/Select'
 import VariableField from '../../components/VariableField'
 import {
   frameToFormValues, transformFrameForApi,
-  resolveVariables, unresolvedVariables,
+  resolveVariables, unresolvedVariables, formatJsonBody,
 } from '../../lib/sceneHelpers'
 
 const FIELD_LABEL = {
@@ -167,7 +167,19 @@ function VariablesPanel({ scene, frames, refreshScene, toast }) {
 // ── Frame form (headers + extractors + assertions) ───────────────────────
 
 function FrameFormBuilder({ value, onChange, knownVarNames }) {
+  const [bodyFormatError, setBodyFormatError] = useState(false)
+
   function upd(key, val) { onChange({ ...value, [key]: val }) }
+
+  function formatBody() {
+    const formatted = formatJsonBody(value.body)
+    if (formatted === null) {
+      setBodyFormatError(true)
+      return
+    }
+    setBodyFormatError(false)
+    upd('body', formatted)
+  }
 
   function addHeader() { onChange({ ...value, headers: [...value.headers, { ...BLANK_HEADER }] }) }
   function removeHeader(i) { onChange({ ...value, headers: value.headers.filter((_, j) => j !== i) }) }
@@ -236,8 +248,32 @@ function FrameFormBuilder({ value, onChange, knownVarNames }) {
 
       {['POST', 'PUT', 'PATCH'].includes(value.method) && (
         <div>
-          <label style={FIELD_LABEL}>Request Body</label>
-          <VariableField as="textarea" style={{ fontSize: 12, resize: 'vertical', minHeight: 52, fontFamily: 'var(--font-mono)', display: 'block' }} placeholder='{"key": "value"}' value={value.body} onChange={v => upd('body', v)} knownVars={knownVarNames} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+            <label style={{ ...FIELD_LABEL, marginBottom: 0 }}>Request Body</label>
+            <button type="button" className="btn btn--ghost btn--sm" style={{ fontSize: 10, padding: '1px 6px', height: 'auto' }} onClick={formatBody}>
+              Format
+            </button>
+          </div>
+          <VariableField
+            as="textarea"
+            autoClose
+            highlightJson
+            style={{ fontSize: 12, resize: 'vertical', minHeight: 180, fontFamily: 'var(--font-mono)', display: 'block' }}
+            placeholder='{"key": "value"}'
+            value={value.body}
+            onChange={v => { upd('body', v); setBodyFormatError(false) }}
+            onBlur={() => {
+              if (!value.body?.trim()) return
+              const formatted = formatJsonBody(value.body)
+              if (formatted !== null) upd('body', formatted)
+            }}
+            knownVars={knownVarNames}
+          />
+          {bodyFormatError && (
+            <p style={{ fontSize: 11, color: 'var(--error)', margin: '3px 0 0', fontStyle: 'italic' }}>
+              Not valid JSON — can't auto-format.
+            </p>
+          )}
         </div>
       )}
 
@@ -464,7 +500,9 @@ export default function SceneFrames() {
       setExpandedId(null); setExpandedForm(null)
     } else {
       setExpandedId(frame._id)
-      setExpandedForm(frameToFormValues(frame))
+      const values = frameToFormValues(frame)
+      const formattedBody = formatJsonBody(values.body)
+      setExpandedForm(formattedBody !== null ? { ...values, body: formattedBody } : values)
     }
   }
 
@@ -560,18 +598,11 @@ export default function SceneFrames() {
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <span style={SUBSECTION_LABEL}>Pipeline — frames run in order top to bottom</span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {staged.length > 0 && (
-              <button className="btn btn--primary btn--sm" disabled={committing} onClick={commitAll} style={{ fontSize: 11, gap: 4 }}>
-                {committing ? <><div className="spinner" style={{ width: 11, height: 11 }} />Saving…</> : <><Save size={11} />Save {staged.length} Frame{staged.length !== 1 ? 's' : ''}</>}
-              </button>
-            )}
-            {!showForm && (
-              <button className="btn btn--ghost btn--sm" style={{ fontSize: 11, gap: 4 }} onClick={() => setShowForm(true)}>
-                <Plus size={12} />Add Frame
-              </button>
-            )}
-          </div>
+          {staged.length > 0 && (
+            <button className="btn btn--primary btn--sm" disabled={committing} onClick={commitAll} style={{ fontSize: 11, gap: 4 }}>
+              {committing ? <><div className="spinner" style={{ width: 11, height: 11 }} />Saving…</> : <><Save size={11} />Save {staged.length} Frame{staged.length !== 1 ? 's' : ''}</>}
+            </button>
+          )}
         </div>
 
         {allItems.length === 0 && !showForm && (
@@ -600,7 +631,7 @@ export default function SceneFrames() {
                   <div className="pipeline-node" style={{ borderColor: isPending ? 'var(--blue)' : isExpanded ? 'var(--blue)' : undefined, color: isPending ? 'var(--blue)' : undefined }}>
                     {idx + 1}
                   </div>
-                  {!isLast && <div className="pipeline-connector" />}
+                  {(!isLast || !showForm) && <div className="pipeline-connector" />}
                 </div>
 
                 <div className="pipeline-card" style={{ borderColor: isDragOver ? 'var(--blue)' : isExpanded ? 'var(--blue)' : isPending ? 'var(--blue-border)' : undefined, background: isPending ? 'var(--blue-dim)' : undefined, opacity: isDragging ? 0.35 : 1 }}>
@@ -671,6 +702,19 @@ export default function SceneFrames() {
               </div>
             )
           })}
+
+          {!showForm && (
+            <div className="pipeline-step">
+              <div className="pipeline-rail">
+                <div className="pipeline-node" style={{ borderStyle: 'dashed', borderColor: 'var(--blue)', color: 'var(--blue)' }}>
+                  <Plus size={12} />
+                </div>
+              </div>
+              <button type="button" className="pipeline-card pipeline-card--ghost" onClick={() => setShowForm(true)}>
+                <Plus size={14} />Add Frame
+              </button>
+            </div>
+          )}
         </div>
 
         {showForm && (

@@ -13,6 +13,7 @@ const { bootstrapDevRunner } = require('./src/utils/bootstrapRunner')
 const { bootstrapSampleScene } = require('./src/utils/bootstrapSampleScene')
 const { connectDatabase, disconnectDatabase } = require("./config/db");
 const { connectRedis, disconnectRedis, getPublisher } = require("./config/redis");
+const { readContainerMemory } = require("./src/utils/containerMemory");
 const scheduler = require("./src/utils/scheduler");
 const dispatchSweeper = require("./src/utils/dispatchSweeper");
 const errorHandler = require("./src/middleware/errors");
@@ -70,6 +71,7 @@ async function startServer() {
     app.get('/api/v1/metrics', authenticateJWT, (_req, res) => {
       const mem = process.memoryUsage();
       const load = os.loadavg();
+      const containerMem = readContainerMemory();
       res.json({
         uptime: Math.floor(process.uptime()),
         memory: {
@@ -79,8 +81,9 @@ async function startServer() {
         },
         system: {
           loadAvg1: parseFloat(load[0].toFixed(2)),
-          totalMem: os.totalmem(),
-          freeMem: os.freemem(),
+          totalMem: containerMem.total,
+          freeMem: containerMem.total - containerMem.used,
+          scope: containerMem.scope,
         },
         node: process.version,
         platform: process.platform,

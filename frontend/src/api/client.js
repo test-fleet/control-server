@@ -27,7 +27,9 @@ async function request(method, path, body) {
       const err = await res.json()
       message = err.message || err.error || message
     } catch (_) {}
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = res.status
+    throw error
   }
 
   if (res.status === 204) return null
@@ -57,7 +59,9 @@ async function upload(method, path, formData) {
       const err = await res.json()
       message = err.message || err.error || message
     } catch (_) {}
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = res.status
+    throw error
   }
 
   if (res.status === 204) return null

@@ -42,13 +42,22 @@ export default function SceneDetailLayout() {
 
   useEffect(() => { load() }, [load])
 
+  const handleSceneGone = useCallback((err) => {
+    if (err.status === 404) {
+      toast.error('This scene no longer exists')
+      navigate('/scenes')
+      return true
+    }
+    return false
+  }, [toast, navigate])
+
   const refreshFrames = useCallback(() => {
-    api.get(`/scenes/${id}/frames`).then(res => setFrames(res.frames || [])).catch(() => {})
-  }, [id])
+    api.get(`/scenes/${id}/frames`).then(res => setFrames(res.frames || [])).catch(err => { handleSceneGone(err) })
+  }, [id, handleSceneGone])
 
   const refreshScene = useCallback(() => {
-    api.get(`/scene/${id}`).then(res => setScene(res.scene || res)).catch(() => {})
-  }, [id])
+    api.get(`/scene/${id}`).then(res => setScene(res.scene || res)).catch(err => { handleSceneGone(err) })
+  }, [id, handleSceneGone])
 
   async function handleToggleEnabled() {
     try {

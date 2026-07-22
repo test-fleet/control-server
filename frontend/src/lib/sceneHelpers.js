@@ -190,3 +190,34 @@ export function unresolvedVariables(text, knownVars) {
   }
   return [...found]
 }
+
+// Pretty-prints a JSON request body that may contain ${var} placeholders
+// either inside a string ("${token}") or bare in a numeric/boolean position
+// (${count}) — both are valid here since resolveVariables does plain text
+// substitution, but bare placeholders aren't valid JSON on their own. Each
+// placeholder is swapped for a same-width numeric sentinel (valid JSON in
+// both positions) before parsing, then swapped back after JSON.stringify.
+// Returns null if the body isn't parseable JSON even with that substitution.
+export function formatJsonBody(raw) {
+  if (!raw || !raw.trim()) return raw
+
+  const tokens = []
+  const withSentinels = raw.replace(/\$\{[A-Za-z0-9_]+\}/g, (match) => {
+    const sentinel = `-9${String(tokens.length).padStart(6, '0')}`
+    tokens.push({ sentinel, match })
+    return sentinel
+  })
+
+  let parsed
+  try {
+    parsed = JSON.parse(withSentinels)
+  } catch {
+    return null
+  }
+
+  let formatted = JSON.stringify(parsed, null, 2)
+  for (const { sentinel, match } of tokens) {
+    formatted = formatted.split(sentinel).join(match)
+  }
+  return formatted
+}
