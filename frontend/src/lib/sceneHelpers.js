@@ -130,6 +130,18 @@ export function toDisplayPath(apiPath) {
   return apiPath
 }
 
+// Loose format check for the "res.body.x[i].y" display form — dot-separated
+// identifiers with optional bracketed array indices, rooted at res.body.
+// Bracket indices match the runner's actual JSONPath dialect
+// (github.com/oliveagle/jsonpath) — a bare dot-index like ".0." is not valid
+// there, it only ever "worked" against this repo's own JS preview shim
+// (frame.test.service.js) because of JS's array/string-key coercion. Used to
+// flag an obviously malformed path as it's typed, not to guarantee it resolves.
+export function isValidJsonPath(displayPath) {
+  if (!displayPath || !displayPath.trim()) return true
+  return /^res\.body(\.[A-Za-z0-9_]+|\.?\[\d+\])*$/.test(displayPath.trim())
+}
+
 export function frameToFormValues(frame) {
   return {
     name: frame.name || '',

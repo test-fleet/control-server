@@ -28,9 +28,16 @@ const resultsRoutes = require('./src/routes/results.routes')
 const brandingRoutes = require('./src/routes/branding.routes')
 const dashboardRoutes = require('./src/routes/dashboard.routes')
 
-async function startServer() {
+// Connects to Mongo/Redis (both retry indefinitely on their own — see
+// config/db.js and config/redis.js — this never throws for a down
+// dependency) and only then runs the one-time bootstrap/scheduler startup
+// that needs a live DB. Deliberately not awaited before app.listen() below:
+// the HTTP server has to come up regardless of whether these are ready yet,
+// so /health, /ready, and the frontend (whose SystemGate polls /ready) are
+// reachable immediately instead of the whole process stalling or dying
+// during a dependency outage at boot.
+async function initDependencies() {
   try {
-    await setupPassport();
     await connectDatabase();
     await connectRedis();
     await bootstrapAdminAccount();
@@ -42,6 +49,18 @@ async function startServer() {
 
     await scheduler.reload()
     dispatchSweeper.start()
+  } catch (err) {
+    // connectDatabase/connectRedis already retry forever internally, so
+    // reaching here means something else in bootstrap/scheduler failed
+    // outright — log it, but don't exit: the server's already up and
+    // /ready will keep reporting the true dependency state either way.
+    console.error("Failed to initialize dependencies:", err);
+  }
+}
+
+async function startServer() {
+  try {
+    await setupPassport();
 
     const app = express();
     app.use(express.json({
@@ -119,6 +138,8 @@ async function startServer() {
     app.listen(port, () => {
       console.log(`server running on port ${port}`);
     });
+
+    initDependencies();
   } catch (err) {
     console.error("Failed to start server:", err);
     process.exit(1);

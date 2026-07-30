@@ -27,9 +27,15 @@ const RunnerSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Admin-controlled lifecycle only ('active' vs 'disabled') — never flips on
+  // its own. Liveness (is it actually responding right now) is a separate,
+  // computed-not-persisted concept; see utils/runnerHealth.js. There used to
+  // be a third 'offline' enum value here, but nothing ever wrote it —
+  // VALID_STATUSES in runner.controller.js already only accepted
+  // active/disabled — so it was dead schema, not a real state.
   status: {
     type: String,
-    enum: ['active', 'disabled', 'offline'],
+    enum: ['active', 'disabled'],
     default: 'active',
   },
   performanceMetrics: {

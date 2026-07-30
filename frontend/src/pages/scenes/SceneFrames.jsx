@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Plus, Trash2, Save, Info } from 'lucide-react'
 import { api } from '../../api/client'
@@ -8,7 +8,7 @@ import Select from '../../components/Select'
 import VariableField from '../../components/VariableField'
 import {
   frameToFormValues, transformFrameForApi,
-  resolveVariables, unresolvedVariables, formatJsonBody,
+  resolveVariables, unresolvedVariables, formatJsonBody, isValidJsonPath,
 } from '../../lib/sceneHelpers'
 
 const FIELD_LABEL = {
@@ -21,6 +21,8 @@ const SUBSECTION_LABEL = {
   textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)',
 }
 const INPUT_SM = { padding: '5px 8px', fontSize: 12, height: 30 }
+const INPUT_ERROR = { borderColor: 'var(--error)' }
+const FIELD_ERROR_TEXT = { fontSize: 10, color: 'var(--error)', marginTop: 2, display: 'block' }
 
 const DATA_TYPE_OPTIONS = ['string', 'number', 'boolean', 'null'].map(t => ({ value: t, label: t }))
 const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => ({ value: m, label: m }))
@@ -34,6 +36,73 @@ function GridLabels({ columns, labels }) {
     <div style={{ display: 'grid', gridTemplateColumns: columns, gap: 4, marginBottom: 4 }}>
       {labels.map((l, i) => <span key={i} style={{ ...FIELD_LABEL, marginBottom: 0 }}>{l}</span>)}
     </div>
+  )
+}
+
+// Click-to-open format hint for the "Source" column on json-type extractors/
+// assertions — the field takes the friendly "res.body.x" form, not the raw
+// JSONPath the backend actually stores, so it's easy to guess wrong. Was
+// previously a plain span with a `title` tooltip, which doesn't fire
+// reliably (and not at all on touch) — a real button + explicit popover
+// works everywhere and signals it's interactive.
+function JsonPathHint() {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    function onKey(e) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <span ref={wrapRef} style={{ position: 'relative', display: 'inline-flex', marginLeft: 4 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-label="JSON path format help"
+        aria-expanded={open}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 13, height: 13, borderRadius: '50%', border: '1px solid var(--text-muted)',
+          background: 'none', padding: 0, fontSize: 9, lineHeight: 1, color: 'var(--text-muted)',
+          cursor: 'pointer', fontFamily: 'sans-serif', fontWeight: 700, flexShrink: 0,
+        }}
+      >
+        ?
+      </button>
+      {open && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 20,
+            width: 230, padding: '8px 10px', borderRadius: 6,
+            border: '1px solid var(--border)', background: 'var(--surface-raised)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+            fontSize: 11, fontWeight: 400, color: 'var(--text-dim)',
+            textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-mono)',
+          }}
+        >
+          JSON path into the parsed response body, dot-separated.<br />
+          Example: <span style={{ color: 'var(--blue)' }}>res.body.data.items[0].id</span>
+        </div>
+      )}
+    </span>
+  )
+}
+
+function SourceHeaderLabel() {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+      Source
+      <JsonPathHint />
+    </span>
   )
 }
 
@@ -166,8 +235,11 @@ function VariablesPanel({ scene, frames, refreshScene, toast }) {
 
 // ── Frame form (headers + extractors + assertions) ───────────────────────
 
-function FrameFormBuilder({ value, onChange, knownVarNames }) {
+function FrameFormBuilder({ value, onChange, knownVarNames, showErrors }) {
   const [bodyFormatError, setBodyFormatError] = useState(false)
+
+  const nameInvalid = showErrors && !value.name.trim()
+  const urlInvalid = showErrors && !value.url.trim()
 
   function upd(key, val) { onChange({ ...value, [key]: val }) }
 
@@ -208,14 +280,16 @@ function FrameFormBuilder({ value, onChange, knownVarNames }) {
         </div>
         <div>
           <label style={FIELD_LABEL}>URL *</label>
-          <VariableField style={INPUT_SM} placeholder="https://api.example.com/endpoint" value={value.url} onChange={v => upd('url', v)} knownVars={knownVarNames} required />
+          <VariableField style={{ ...INPUT_SM, ...(urlInvalid ? INPUT_ERROR : {}) }} placeholder="https://api.example.com/endpoint" value={value.url} onChange={v => upd('url', v)} knownVars={knownVarNames} required />
+          {urlInvalid && <span style={FIELD_ERROR_TEXT}>URL is required</span>}
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 6 }}>
         <div>
           <label style={FIELD_LABEL}>Name *</label>
-          <input className="form-input" style={INPUT_SM} value={value.name} onChange={e => upd('name', e.target.value)} required />
+          <input className="form-input" style={{ ...INPUT_SM, ...(nameInvalid ? INPUT_ERROR : {}) }} value={value.name} onChange={e => upd('name', e.target.value)} required />
+          {nameInvalid && <span style={FIELD_ERROR_TEXT}>Name is required</span>}
         </div>
         <div>
           <label style={FIELD_LABEL}>Timeout (s)</label>
@@ -288,16 +362,19 @@ function FrameFormBuilder({ value, onChange, knownVarNames }) {
         {value.extractors.length === 0
           ? <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>No extractors — variables will not be saved from this frame.</p>
           : <>
-              <GridLabels columns="1fr 90px 1fr 105px 26px" labels={['Variable', 'Type', 'Source', 'Data Type', '']} />
-              {value.extractors.map((ex, i) => (
+              <GridLabels columns="1fr 90px 1fr 105px 26px" labels={['Variable', 'Type', <SourceHeaderLabel key="src" />, 'Data Type', '']} />
+              {value.extractors.map((ex, i) => {
+              const sourceInvalid = ex.type === 'json' && ex.source.trim() && !isValidJsonPath(ex.source)
+              return (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr 105px 26px', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                 <input className="form-input" style={INPUT_SM} placeholder="token" value={ex.name} onChange={e => updExtractor(i, 'name', e.target.value)} required />
                 <Select style={INPUT_SM} value={ex.type} onChange={t => updExtractor(i, 'type', t)} options={EXTRACTOR_TYPE_OPTIONS} />
-                <input className="form-input" style={INPUT_SM} placeholder={ex.type === 'json' ? 'res.body.data.id' : 'Content-Type'} value={ex.source} onChange={e => updExtractor(i, 'source', e.target.value)} required />
+                <input className="form-input" style={{ ...INPUT_SM, ...(sourceInvalid ? INPUT_ERROR : {}) }} title={sourceInvalid ? 'Expected format: res.body.field.path' : undefined} placeholder={ex.type === 'json' ? 'res.body.data.id' : 'Content-Type'} value={ex.source} onChange={e => updExtractor(i, 'source', e.target.value)} required />
                 <Select style={INPUT_SM} value={ex.dataType} onChange={t => updExtractor(i, 'dataType', t)} options={DATA_TYPE_OPTIONS} />
                 <button type="button" className="btn btn--ghost btn--icon" style={{ color: 'var(--error)', width: 26, height: 26 }} onClick={() => removeExtractor(i)}><Trash2 size={12} /></button>
               </div>
-              ))}
+              )
+              })}
             </>
         }
       </div>
@@ -313,7 +390,7 @@ function FrameFormBuilder({ value, onChange, knownVarNames }) {
         {value.assertions.length === 0
           ? <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>No assertions — response will not be validated.</p>
           : <>
-              <GridLabels columns="100px 64px 1fr 1fr 26px" labels={['Type', 'Op', 'Expected', 'Source', '']} />
+              <GridLabels columns="100px 64px 1fr 1fr 26px" labels={['Type', 'Op', 'Expected', <SourceHeaderLabel key="src" />, '']} />
               {value.assertions.map((as, i) => {
               const allOps = [
                 { value: 'eq', label: '=' }, { value: 'ne', label: '≠' },
@@ -324,6 +401,7 @@ function FrameFormBuilder({ value, onChange, knownVarNames }) {
               const ops = as.type === 'status' ? allOps.filter(o => o.value !== 'contains') : allOps
               const expectedPlaceholder = as.type === 'status' ? '200' : as.type === 'header' ? 'text value' : 'value'
               const sourcePlaceholder = as.type === 'json' ? 'res.body.field' : 'Header-Name'
+              const sourceInvalid = as.type === 'json' && as.source.trim() && !isValidJsonPath(as.source)
               return (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '100px 64px 1fr 1fr 26px', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                   <Select style={INPUT_SM} value={as.type} options={ASSERTION_TYPE_OPTIONS} onChange={newType => {
@@ -334,7 +412,7 @@ function FrameFormBuilder({ value, onChange, knownVarNames }) {
                   <Select style={INPUT_SM} value={as.operator} onChange={op => updAssertion(i, 'operator', op)} options={ops} />
                   <input className="form-input" style={INPUT_SM} placeholder={expectedPlaceholder} value={as.expected} onChange={e => updAssertion(i, 'expected', e.target.value)} />
                   {as.type !== 'status'
-                    ? <input className="form-input" style={INPUT_SM} placeholder={sourcePlaceholder} value={as.source} onChange={e => updAssertion(i, 'source', e.target.value)} />
+                    ? <input className="form-input" style={{ ...INPUT_SM, ...(sourceInvalid ? INPUT_ERROR : {}) }} title={sourceInvalid ? 'Expected format: res.body.field.path' : undefined} placeholder={sourcePlaceholder} value={as.source} onChange={e => updAssertion(i, 'source', e.target.value)} />
                     : <div />
                   }
                   <button type="button" className="btn btn--ghost btn--icon" style={{ color: 'var(--error)', width: 26, height: 26 }} onClick={() => removeAssertion(i)}><Trash2 size={12} /></button>
@@ -424,7 +502,7 @@ function TestPanel({ value, knownVars, toast }) {
         // growing the panel (and the whole frame editor) taller — toggling
         // response body/headers below just extends the scroll area, not the layout.
         <div style={{ marginTop: 12, flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
-          <FrameDetail frame={result} />
+          <FrameDetail frame={result} defaultShowBody />
         </div>
       ) : (
         <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0, fontStyle: 'italic' }}>
@@ -438,15 +516,16 @@ function TestPanel({ value, knownVars, toast }) {
 // ── Main ──────────────────────────────────────────────────────────────────
 
 export default function SceneFrames() {
-  const { scene, frames, refreshFrames, refreshScene, toast } = useOutletContext()
+  const { scene, frames, refreshFrames, refreshScene, toast, staged, setStaged, committing, commitAll, setUnsavedFrame } = useOutletContext()
 
-  const [staged, setStaged] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ ...BLANK_FRAME })
+  const [stageErrors, setStageErrors] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const [expandedForm, setExpandedForm] = useState(null)
+  const [expandedBaseline, setExpandedBaseline] = useState(null)
+  const [editErrors, setEditErrors] = useState(false)
   const [savingFrame, setSavingFrame] = useState(false)
-  const [committing, setCommitting] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
@@ -496,17 +575,29 @@ export default function SceneFrames() {
   }
 
   function toggleExpand(frame) {
+    setEditErrors(false)
     if (expandedId === frame._id) {
-      setExpandedId(null); setExpandedForm(null)
+      setExpandedId(null); setExpandedForm(null); setExpandedBaseline(null)
     } else {
       setExpandedId(frame._id)
       const values = frameToFormValues(frame)
       const formattedBody = formatJsonBody(values.body)
-      setExpandedForm(formattedBody !== null ? { ...values, body: formattedBody } : values)
+      const initial = formattedBody !== null ? { ...values, body: formattedBody } : values
+      setExpandedForm(initial)
+      setExpandedBaseline(initial)
     }
   }
 
+  // Returns whether the save actually went through — the unsaved-frame nav
+  // guard (see the useEffect below) awaits this to decide whether it's safe
+  // to continue navigating away.
   async function handleFrameUpdate(frame) {
+    if (!expandedForm.name.trim() || !expandedForm.url.trim()) {
+      setEditErrors(true)
+      toast.error('Name and URL are required — fields are highlighted below')
+      return false
+    }
+    setEditErrors(false)
     setSavingFrame(true)
     try {
       const { extractors, assertions, headers } = transformFrameForApi(expandedForm)
@@ -525,10 +616,13 @@ export default function SceneFrames() {
       })
       setExpandedId(null)
       setExpandedForm(null)
+      setExpandedBaseline(null)
       toast.success(`Frame "${expandedForm.name}" updated`)
       refreshFrames()
+      return true
     } catch (err) {
       toast.error(err.message)
+      return false
     } finally {
       setSavingFrame(false)
     }
@@ -544,38 +638,46 @@ export default function SceneFrames() {
   }
 
   function stageFrame() {
-    if (!form.name.trim() || !form.url.trim()) return
+    if (!form.name.trim() || !form.url.trim()) {
+      setStageErrors(true)
+      toast.error('Name and URL are required — fields are highlighted below')
+      return false
+    }
+    setStageErrors(false)
     setStaged(s => [...s, { ...form, _sid: Date.now() }])
     setForm({ ...BLANK_FRAME })
     setShowForm(false)
+    return true
   }
 
-  async function commitAll() {
-    setCommitting(true)
-    let addedCount = 0
-    for (const f of staged) {
-      try {
-        const { extractors, assertions, headers } = transformFrameForApi(f)
-        await api.post(`/scenes/${scene.id}/frames`, {
-          name: f.name.trim(),
-          enabled: f.enabled,
-          request: { method: f.method, url: f.url.trim(), headers, body: f.body.trim(), timeout: Math.floor(Number(f.timeout) * 1000) },
-          extractors,
-          assertions,
-        })
-        addedCount++
-      } catch (err) {
-        toast.error(`Failed to save "${f.name}": ${err.message}`)
-      }
+  // Reports the in-progress (not-yet-staged/-saved) frame form up to
+  // SceneDetailLayout so it can block tab navigation and offer to stage/save
+  // or discard, instead of silently unmounting this component (and the
+  // form with it) the moment the user clicks Runs/Settings.
+  useEffect(() => {
+    if (showForm && JSON.stringify(form) !== JSON.stringify(BLANK_FRAME)) {
+      setUnsavedFrame({
+        mode: 'new',
+        canCommit: !!(form.name.trim() && form.url.trim()),
+        commit: stageFrame,
+        discard: () => { setForm({ ...BLANK_FRAME }); setShowForm(false); setStageErrors(false) },
+      })
+      return
     }
-    setStaged(s => s.slice(addedCount))
-    if (addedCount > 0) {
-      toast.success(`${addedCount} frame${addedCount !== 1 ? 's' : ''} saved`)
-      refreshFrames()
-      refreshScene()
+    if (expandedId && expandedForm && expandedBaseline && JSON.stringify(expandedForm) !== JSON.stringify(expandedBaseline)) {
+      const original = frames.find(f => f._id === expandedId)
+      setUnsavedFrame({
+        mode: 'edit',
+        canCommit: !!(expandedForm.name.trim() && expandedForm.url.trim()),
+        commit: () => handleFrameUpdate(original),
+        discard: () => { setExpandedId(null); setExpandedForm(null); setExpandedBaseline(null); setEditErrors(false) },
+      })
+      return
     }
-    setCommitting(false)
-  }
+    setUnsavedFrame(null)
+  }, [showForm, form, expandedId, expandedForm, expandedBaseline, frames]) // eslint-disable-line
+
+  useEffect(() => () => setUnsavedFrame(null), []) // eslint-disable-line
 
   async function handleDelete(frame) {
     setDeletingId(frame._id)
@@ -687,12 +789,12 @@ export default function SceneFrames() {
                   {isExpanded && expandedForm && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 65fr) minmax(280px, 35fr)', gap: 16, alignItems: 'start' }}>
-                        <FrameFormBuilder value={expandedForm} onChange={setExpandedForm} knownVarNames={allVarNames} />
+                        <FrameFormBuilder value={expandedForm} onChange={setExpandedForm} knownVarNames={allVarNames} showErrors={editErrors} />
                         <TestPanel value={expandedForm} knownVars={knownVars} toast={toast} />
                       </div>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 12 }}>
-                        <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setExpandedId(null); setExpandedForm(null) }}>Cancel</button>
-                        <button type="button" className="btn btn--primary btn--sm" disabled={savingFrame || !expandedForm.name.trim() || !expandedForm.url.trim()} onClick={() => handleFrameUpdate(frame)}>
+                        <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setExpandedId(null); setExpandedForm(null); setExpandedBaseline(null); setEditErrors(false) }}>Cancel</button>
+                        <button type="button" className="btn btn--primary btn--sm" disabled={savingFrame} onClick={() => handleFrameUpdate(frame)}>
                           {savingFrame ? <><div className="spinner" style={{ width: 12, height: 12 }} />Saving…</> : <><Save size={12} />Save Changes</>}
                         </button>
                       </div>
@@ -720,12 +822,12 @@ export default function SceneFrames() {
         {showForm && (
           <div style={{ padding: 14, borderRadius: 9, border: '1px dashed var(--blue)', background: 'var(--blue-dim)', marginTop: allItems.length > 0 ? 8 : 0 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 65fr) minmax(280px, 35fr)', gap: 16, alignItems: 'start' }}>
-              <FrameFormBuilder value={form} onChange={setForm} knownVarNames={allVarNames} />
+              <FrameFormBuilder value={form} onChange={setForm} knownVarNames={allVarNames} showErrors={stageErrors} />
               <TestPanel value={form} knownVars={knownVars} toast={toast} />
             </div>
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setShowForm(false); setForm({ ...BLANK_FRAME }) }}>Cancel</button>
-              <button type="button" className="btn btn--primary btn--sm" disabled={!form.name.trim() || !form.url.trim()} onClick={stageFrame}>
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setShowForm(false); setForm({ ...BLANK_FRAME }); setStageErrors(false) }}>Cancel</button>
+              <button type="button" className="btn btn--primary btn--sm" onClick={stageFrame}>
                 <Plus size={12} />Stage Frame
               </button>
             </div>

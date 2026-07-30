@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Server, Clapperboard, Users, LogOut, Activity, PlayCircle,
-  Sun, Moon, Image, Search, ChevronsLeft, ChevronsRight, AlertTriangle, WifiOff,
+  Sun, Moon, Image, Search, ChevronsLeft, ChevronsRight, AlertTriangle, WifiOff, HelpCircle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { FleetProvider, useFleet } from '../context/FleetContext'
+import { NavGuardProvider, useNavGuard } from '../context/NavGuardContext'
 import CommandPalette from './CommandPalette'
 
 export function UserAvatar({ user, size = 30 }) {
@@ -34,6 +35,7 @@ const SECTION_LABELS = [
   { prefix: '/settings/organization', label: 'Organization' },
   { prefix: '/settings/users', label: 'Users' },
   { prefix: '/settings/system', label: 'System' },
+  { prefix: '/settings/help', label: 'Help Center' },
 ]
 
 function Breadcrumb() {
@@ -76,6 +78,7 @@ function ShellInner() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { theme, toggle } = useTheme()
+  const { requestNavigation } = useNavGuard()
   const [expanded, setExpanded] = useState(() => localStorage.getItem('testfleet-rail') !== 'collapsed')
   const [paletteOpen, setPaletteOpen] = useState(false)
 
@@ -102,7 +105,7 @@ function ShellInner() {
   return (
     <div className="app-shell">
       <aside className={`rail${expanded ? ' expanded' : ''}`}>
-        <NavLink to="/dashboard" className="rail-logo">
+        <NavLink to="/dashboard" className="rail-logo" onClick={e => { e.preventDefault(); requestNavigation(navigate, '/dashboard') }}>
           <div className="rail-logo-icon"><img src="/api/v1/branding/image" alt="" onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/favicon.svg' }} /></div>
           <span className="rail-logo-name">TestFleet</span>
         </NavLink>
@@ -119,6 +122,7 @@ function ShellInner() {
           {user?.role === 'admin' && <RailLink to="/settings/organization" icon={Image} label="Organization" />}
           {user?.role === 'admin' && <RailLink to="/settings/users" icon={Users} label="Users" />}
           <RailLink to="/settings/system" icon={Activity} label="System" />
+          <RailLink to="/settings/help" icon={HelpCircle} label="Help Center" />
         </nav>
 
         <button className="rail-toggle" onClick={() => setExpanded(e => !e)} title={expanded ? 'Collapse' : 'Expand'}>
@@ -165,8 +169,15 @@ function ShellInner() {
 
 function RailLink({ to, icon, label }) {
   const Icon = icon
+  const navigate = useNavigate()
+  const { requestNavigation } = useNavGuard()
   return (
-    <NavLink to={to} className={({ isActive }) => `rail-link${isActive ? ' active' : ''}`} title={label}>
+    <NavLink
+      to={to}
+      className={({ isActive }) => `rail-link${isActive ? ' active' : ''}`}
+      title={label}
+      onClick={e => { e.preventDefault(); requestNavigation(navigate, to) }}
+    >
       <Icon size={16} />
       <span className="rail-link-label">{label}</span>
     </NavLink>
@@ -175,8 +186,10 @@ function RailLink({ to, icon, label }) {
 
 export default function AppShell() {
   return (
-    <FleetProvider>
-      <ShellInner />
-    </FleetProvider>
+    <NavGuardProvider>
+      <FleetProvider>
+        <ShellInner />
+      </FleetProvider>
+    </NavGuardProvider>
   )
 }

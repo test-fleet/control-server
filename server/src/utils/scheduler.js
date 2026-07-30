@@ -6,6 +6,20 @@ const Runner = require('../models/runner.model')
 const { getPublisher } = require('../../config/redis')
 const runDispatchService = require('../services/runDispatch.service')
 const { REDIS_CHANNEL } = require('./constants')
+const { isRunnerUnresponsive, heartbeatThresholdMs } = require('./runnerHealth')
+
+// A runner with status 'active' still counts as expected even if its process
+// is down — status only flips via an explicit admin action (see
+// runner.service#updateRunner), never automatically on a missed heartbeat.
+// Filtering by heartbeat here (the same check the dashboard uses to show a
+// runner as "offline") is what keeps a dead runner from making every scene
+// sit pending for the full scene timeout waiting for a report that will
+// never come.
+async function countAvailableRunners() {
+  const threshold = heartbeatThresholdMs()
+  const runners = await Runner.find({ status: 'active' }).select('lastSeen').lean()
+  return runners.filter(r => !isRunnerUnresponsive(r, threshold)).length
+}
 
 // sceneId -> cron.ScheduledTask
 const jobs = new Map()
@@ -76,7 +90,7 @@ async function _fireJob(sceneId) {
 
   const [frames, expectedRunners] = await Promise.all([
     Frame.find({ sceneId, enabled: true }).sort({ order: 1 }),
-    Runner.countDocuments({ status: 'active' }),
+    countAvailableRunners(),
   ])
 
   if (frames.length === 0) {
@@ -169,7 +183,7 @@ async function fireJobNow(sceneId) {
 
   const [frames, expectedRunners] = await Promise.all([
     Frame.find({ sceneId, enabled: true }).sort({ order: 1 }),
-    Runner.countDocuments({ status: 'active' }),
+    countAvailableRunners(),
   ])
 
   if (frames.length === 0) {

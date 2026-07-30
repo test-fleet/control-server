@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard'
 import Scenes from './pages/Scenes'
 import Users from './pages/Users'
 import System from './pages/System'
+import HelpCenter from './pages/HelpCenter'
 import Organization from './pages/settings/Organization'
 import RunnerDetail from './pages/RunnerDetail'
 import RunDetail from './pages/RunDetail'
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/runners/:id" element={<RunnerDetail />} />
 
                 <Route path="/settings/system" element={<System />} />
+                <Route path="/settings/help" element={<HelpCenter />} />
                 <Route element={<AdminRoute />}>
                   <Route path="/settings/organization" element={<Organization />} />
                   <Route path="/settings/users" element={<Users />} />

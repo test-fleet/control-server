@@ -1,19 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Clapperboard, Server, Users as UsersIcon, LayoutDashboard, PlayCircle } from 'lucide-react'
+import { Search, Clapperboard, Server, Users as UsersIcon, LayoutDashboard, PlayCircle, HelpCircle } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { useNavGuard } from '../context/NavGuardContext'
 
 const STATIC_ITEMS = [
   { group: 'Go to', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { group: 'Go to', label: 'Runners', icon: Server, path: '/runners' },
   { group: 'Go to', label: 'Scenes', icon: Clapperboard, path: '/scenes' },
   { group: 'Go to', label: 'Runs', icon: PlayCircle, path: '/runs' },
+  { group: 'Go to', label: 'Help Center', icon: HelpCircle, path: '/settings/help' },
 ]
 
 export default function CommandPalette({ onClose }) {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { requestNavigation } = useNavGuard()
   const [query, setQuery] = useState('')
   const [scenes, setScenes] = useState([])
   const [runners, setRunners] = useState([])
@@ -51,7 +54,7 @@ export default function CommandPalette({ onClose }) {
 
   function go(path) {
     onClose()
-    navigate(path)
+    requestNavigation(navigate, path)
   }
 
   useEffect(() => {

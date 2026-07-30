@@ -18,7 +18,6 @@ function runnerDisplayStatus(runner, threshold, isCredentialFlagged = false) {
   if (isCredentialFlagged) return { variant: 'active-warn', label: 'Active' }
   if (!runner.lastSeen) return { variant: 'unresponsive', label: 'Unresponsive' }
   if (Date.now() - new Date(runner.lastSeen).getTime() > threshold) return { variant: 'unresponsive', label: 'Unresponsive' }
-  if (runner.status === 'offline') return { variant: 'offline', label: 'Offline' }
   return { variant: 'online', label: 'Active' }
 }
 
@@ -159,7 +158,7 @@ export default function RunnerDetail() {
 
   const isCredentialFlagged = runner.multipleInstances || borrowedNames.has(runner.name)
   const { variant, label } = runnerDisplayStatus(runner, threshold, isCredentialFlagged)
-  const isDisconnected = ['unresponsive', 'offline', 'disabled'].includes(variant)
+  const isDisconnected = ['unresponsive', 'disabled'].includes(variant)
   const pm = runner.performanceMetrics || {}
   const hasMetrics = pm.recordedAt !== null && pm.recordedAt !== undefined
   const approxWindowMins = history.length > 1 ? Math.round((new Date(history[history.length - 1].time) - new Date(history[0].time)) / 60000) : null

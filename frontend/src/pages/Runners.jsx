@@ -17,7 +17,6 @@ function runnerDisplayStatus(runner, threshold, isCredentialFlagged = false) {
   if (isCredentialFlagged) return { variant: 'active-warn', label: 'Active', color: 'var(--warning)' }
   if (!runner.lastSeen) return { variant: 'unresponsive', label: 'Unresponsive', color: 'var(--error)' }
   if (Date.now() - new Date(runner.lastSeen).getTime() > threshold) return { variant: 'unresponsive', label: 'Unresponsive', color: 'var(--error)' }
-  if (runner.status === 'offline') return { variant: 'offline', label: 'Offline', color: 'var(--text-muted)' }
   return { variant: 'online', label: 'Active', color: 'var(--lime)' }
 }
 

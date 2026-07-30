@@ -1,7 +1,15 @@
+// Mirrors (a basic subset of) the runner's real JSONPath dialect
+// (github.com/oliveagle/jsonpath) closely enough for a live preview: dot
+// keys and bracketed array indices, e.g. "data.items[0].id" or "[0].email"
+// for a root-level array. Splitting on anything that isn't '.', '[', or ']'
+// flattens both forms into the same key list, so `items[0]` and `items.0`
+// resolve identically here — this is just the local test-preview shim, not
+// a full JSONPath implementation.
 function resolvePath(obj, path) {
   const normalized = path === '$' ? '' : path.startsWith('$.') ? path.slice(2) : path
   if (!normalized) return obj
-  return normalized.split('.').reduce((curr, key) => curr?.[key], obj)
+  const keys = normalized.match(/[^.[\]]+/g) || []
+  return keys.reduce((curr, key) => curr?.[key], obj)
 }
 
 function resolveActual(type, source, statusCode, headers, parsedBody) {

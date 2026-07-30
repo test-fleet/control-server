@@ -6,14 +6,17 @@ import { statusColor } from '../lib/statusColor'
 
 export { statusColor }
 
-// A frame is "not executed" if the scene defines it (and it was enabled at
-// run time) but this runner's result has no entry for it — fail-fast means
-// a failed frame stops the run, so everything after it just never ran.
+// A frame is "not executed" if the scene defined it *as of this run* (still
+// enabled, and created before the run started — a frame added to the scene
+// after the fact never ran here and shouldn't be shown as skipped) but this
+// runner's result has no entry for it — fail-fast means a failed frame stops
+// the run, so everything after it just never ran.
 function RunnerFrames({ runner, allFrames }) {
   const [selected, setSelected] = useState(null)
   const frames = runner.frames || []
   const executedIds = new Set(frames.map(f => f.frameId))
-  const skipped = (allFrames || []).filter(f => f.enabled && !executedIds.has(f._id))
+  const runStartedAt = new Date(runner.startedAt)
+  const skipped = (allFrames || []).filter(f => f.enabled && !executedIds.has(f._id) && new Date(f.createdAt) < runStartedAt)
 
   const combined = [
     ...frames.map(f => ({ ...f, _key: f.frameId })),

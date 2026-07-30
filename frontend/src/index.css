@@ -342,11 +342,22 @@ input, select, textarea { font-family: inherit; }
 .actions-menu-item--danger:hover { background: var(--error-bg); }
 .actions-menu-divider { height: 1px; background: var(--border); margin: 4px 2px; }
 
-/* ── Modal ── */
+/* ── Modal ──
+   No backdrop-filter here on purpose — it was tried (both animated and
+   static, plus split onto a separate layer from the fade) and none of it
+   was enough: a fixed, full-viewport backdrop-filter is a known Chromium
+   compositing cost that isn't limited to its own animation. Any repaint
+   anywhere near/under it — including something as small as a button's
+   :hover background — can force Chrome to redo the blur sampling, which is
+   why "everything" (button hovers included) got laggy specifically while
+   this was on screen, Chrome-only. Safari's compositor doesn't have this
+   problem, which is why it only ever showed up in Chrome. Plain dimming
+   (no blur) is the standard, cheap-everywhere pattern most modal libraries
+   use for exactly this reason. */
 .modal-overlay {
   position: fixed; inset: 0; background: var(--overlay);
   display: flex; align-items: center; justify-content: center;
-  z-index: 100; animation: fade-in 0.12s ease; backdrop-filter: blur(2px);
+  z-index: 100; animation: fade-in 0.12s ease;
 }
 .modal {
   background: var(--surface); border: 1px solid var(--border-bright); border-radius: 12px;

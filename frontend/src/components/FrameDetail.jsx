@@ -1,5 +1,6 @@
 import { useState, Fragment } from 'react'
 import MethodBadge from './MethodBadge'
+import { toDisplayPath } from '../lib/sceneHelpers'
 
 const OP_LABEL = {
   eq: '=', equals: '=', ne: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤',
@@ -76,10 +77,10 @@ function HeaderTable({ headers }) {
   )
 }
 
-export function FrameDetail({ frame }) {
+export function FrameDetail({ frame, defaultShowBody = false }) {
   const [showReqHeaders, setShowReqHeaders] = useState(false)
   const [showResHeaders, setShowResHeaders] = useState(false)
-  const [showBody, setShowBody] = useState(false)
+  const [showBody, setShowBody] = useState(defaultShowBody)
 
   const assertions = frame.assertions || []
   const failedCount = assertions.filter(a => !a.passed).length
@@ -132,7 +133,7 @@ export function FrameDetail({ frame }) {
                 </span>
                 <span style={{ color: 'var(--text-muted)' }}>{a.type}</span>
                 <span style={{ color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {a.source && a.type !== 'status' ? a.source : '—'}
+                  {a.source && a.type !== 'status' ? (a.type === 'json' ? toDisplayPath(a.source) : a.source) : '—'}
                 </span>
                 <span style={{ color: 'var(--blue)', textAlign: 'center' }}>
                   {OP_LABEL[a.operator] ?? a.operator}

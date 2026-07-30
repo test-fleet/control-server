@@ -4,18 +4,9 @@ const User = require('../models/user.model')
 const { SceneResult } = require('../models/results.models')
 const runDispatchService = require('./runDispatch.service')
 const { INCOMPLETE_RUNNER_ID } = require('../utils/constants')
+const { heartbeatThresholdMs, isRunnerUnresponsive } = require('../utils/runnerHealth')
 
 const QUEUE_RECENT_WINDOW_MS = 30 * 1000
-
-function heartbeatThresholdMs() {
-  const interval = parseInt(process.env.HEARTBEAT_INTERVAL) || 30000
-  return interval * 3
-}
-
-function isRunnerUnresponsive(runner, thresholdMs) {
-  if (!runner.lastSeen) return true
-  return Date.now() - new Date(runner.lastSeen).getTime() > thresholdMs
-}
 
 // Mirrors the frontend's dupe-credential heuristic: a runner is flagged if it
 // has reported multiple concurrent instances, or another runner's heartbeat
